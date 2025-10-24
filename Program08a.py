@@ -27,7 +27,8 @@ for i in range(step_count):
     zs[i+1] = zs[i] + (z_dot*dt)
 
 fig=plt.figure()
-ax=Axes3D(fig)
+ax = fig.add_subplot(111, projection='3d')
+# ax=Axes3D(fig)
 ax.plot(xs, ys, zs, lw=0.5)
 ax.set_xlabel('x', fontsize=15)
 ax.set_ylabel('y', fontsize=15)
