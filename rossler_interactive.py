@@ -53,7 +53,7 @@ def zoom_update(exp):
     bound = 6 * (10 ** -exp)
     ax.set(xlim3d=(-bound, bound))
     ax.set(ylim3d=(-bound, bound))
-    ax.set(zlim3d=(0, bound))
+    ax.set(zlim3d=(0, 2 * bound))
     fig.canvas.draw_idle()
 
 # Erstellen der Slider
