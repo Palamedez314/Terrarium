@@ -24,5 +24,20 @@ for a in np.arange(8, 11, 0.1):
     xs = odeint(chua, x0, time)
     imgplot = plt.plot(xs[:, 0], xs[:, 1], "r-")
     myimages.append(imgplot)
-my_anim=ArtistAnimation(fig, myimages, interval=500, blit=False, repeat_delay=500)
+my_anim=ArtistAnimation(fig, myimages, interval=400, blit=False, repeat_delay=400)
 plt.show()
+
+# a = 8
+
+# time = np.arange(0, tmax, 0.01)
+# xs = odeint(chua, x0, time)
+
+# fig=plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+# ax.plot(xs[:, 0], xs[:, 1], xs[:, 2], 'b-', lw=0.5)
+# ax.set_xlabel('x', fontsize=15)
+# ax.set_ylabel('y', fontsize=15)
+# ax.set_zlabel('z', fontsize=15)
+# plt.tick_params(labelsize=15)
+# ax.set_title('Chuas Circuit', fontsize=15)
+# plt.show()

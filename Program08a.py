@@ -2,9 +2,16 @@
 # In this case, iteration is used to solve the ODEs.
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+# from mpl_toolkits.mplot3d import Axes3D
 
-def Rossler(x, y, z, a = 0.2, b=0.2, c=6.3):
+from scipy.integrate import odeint
+
+# a = 0.2
+# b = 0.2
+# c = 6.3
+
+def Rossler(x, y, z, a=0.2, b=0.2 , c=6.3):
+    # x, y, z = X
     x_dot = - y - z
     y_dot = x + a * y
     z_dot = b + x * z - c * z
@@ -25,6 +32,12 @@ for i in range(step_count):
     xs[i+1] = xs[i] + (x_dot*dt)
     ys[i+1] = ys[i] + (y_dot*dt)
     zs[i+1] = zs[i] + (z_dot*dt)
+
+# tmax =  50
+# n = 10000
+# t = np.linspace(0, tmax, n)
+# f = odeint(Rossler, (1.0, 1.0, 1.0), t, args=(a, b, c))
+# xs, ys, zs = f.T
 
 fig=plt.figure()
 ax = fig.add_subplot(111, projection='3d')

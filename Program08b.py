@@ -19,15 +19,12 @@ def Lorenz(X, t, sigma, beta, rho):
     dz = -beta * z + x * y
     return dx, dy, dz
 
-# Integrate the Lorenz equations on the time grid t.
 t = np.linspace(0, tmax, n)
 f = odeint(Lorenz, (x0, y0, z0), t, args=(sigma, beta, rho))
 x, y, z = f.T
 
-# Plot the Lorenz attractor using a Matplotlib 3D projection.
 fig=plt.figure()
 ax = fig.add_subplot(111, projection='3d')
-# ax = Axes3D(fig)
 ax.plot(x, y, z, 'b-', lw=0.5)
 ax.set_xlabel('x', fontsize=15)
 ax.set_ylabel('y', fontsize=15)
