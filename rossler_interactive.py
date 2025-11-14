@@ -9,14 +9,21 @@ def Rossler(x, y, z, a, b, c):
     z_dot = b + x * z - c * z
     return x_dot, y_dot, z_dot
 
-# Initialisierung der Parameter
+# Parameter des Systems
 a, b = 0.2, 0.2
 c_init = 2.9
 c_min = 2
 c_max = 7
+
+# Startpunkt der Trajektorie
 starting_point = (1.0, 1.0, 1.0)
+
+# Schrittweite und -zahl der Simulation
 dt = 0.01
 step_count = 50000
+
+# Koordinatenschranke
+plot_limit = 6.0
 
 # Erstellen der Arrays
 xs=np.empty((step_count + 1,))
@@ -29,10 +36,7 @@ ax = fig.add_subplot(projection="3d")
 fig.subplots_adjust(bottom=0.2, left=0.15)
 l, = ax.plot([], [], [], lw=0.5)
 
-# Setup der Axes-Eigenschaften
-ax.set(xlim3d=(-6, 6), xlabel='x')
-ax.set(ylim3d=(-6, 6), ylabel='y')
-ax.set(zlim3d=(0, 6), zlabel='z')
+plt.title("Rössler-Attraktor")
 
 # Update-Funktion für c-Parameter
 def c_update(c):
@@ -49,12 +53,15 @@ def c_update(c):
 c_update(c_init)
 
 # Update-Funktion für Zoom
-def zoom_update(exp):
-    bound = 6 * (10 ** -exp)
+def zoom_update(exponent):
+    bound = plot_limit * (10 ** -exponent)
     ax.set(xlim3d=(-bound, bound))
     ax.set(ylim3d=(-bound, bound))
     ax.set(zlim3d=(0, 2 * bound))
     fig.canvas.draw_idle()
+
+# Setup der anfänglichen Koordinatenschranken (-plot_limit, plot_limit)^2 x (0, 2*plot_limit)
+zoom_update(0)
 
 # Erstellen der Slider
 hslideraxis = fig.add_axes([0.35, 0.1, 0.55, 0.03])
