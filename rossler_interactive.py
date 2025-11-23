@@ -2,12 +2,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 
+from time import time
+
 # Rössler-System
 def Rossler(x, y, z, a, b, c):
     x_dot = - y - z
     y_dot = x + a * y
     z_dot = b + x * z - c * z
-    return x_dot, y_dot, z_dot
+    return np.array([x_dot, y_dot, z_dot])
 
 # Parameter des Systems
 a, b = 0.2, 0.2
@@ -20,7 +22,7 @@ starting_point = (1.0, 1.0, 1.0)
 
 # Schrittweite und -zahl der Simulation
 dt = 0.01
-step_count = 5000
+step_count = 50000
 
 # Koordinatenschranke
 plot_limit = 6.0
@@ -33,68 +35,86 @@ zs=np.empty((step_count + 1,))
 # Erstellen von Figure- und Axes-Objekten
 fig = plt.figure()
 ax = fig.add_subplot(projection="3d")
-print(ax)
+#print(ax)
 fig.subplots_adjust(bottom=0.2, left=0.15)
 l, = ax.plot([], [], [], lw=0.5)
 
 plt.title("Rössler-Attraktor")
 
-import warnings #wieder entfernen
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 
-def colored_line(x, y, z, c, ax, **lc_kwargs):
-    
-    if "array" in lc_kwargs:
-        warnings.warn('The provided "array" keyword argument will be overridden')
+def colored_3d_line(ax, points, c):
+    # Bau der Segmente
+    points_rs = points.T.reshape(-1, 1, 3)
+    #print(points)
+    c = c[:len(points)]
+    segs = np.concatenate([points_rs[:-1], points_rs[1:]], axis=1)
+    #print(segs)
+    # Normalize mappt die segmente linear auf [0,1]; für colormap
+    lc = Line3DCollection(segs, cmap="plasma", norm=plt.Normalize(0,1))
+    lc.set_array(c)
+    lc.set_linewidth(0.8)
+    ax.add_collection3d(lc)
 
-    # Kp was das macht, war schon da
-    default_kwargs = {"capstyle": "butt"}
-    default_kwargs.update(lc_kwargs)
-
-
-    #Die "50" sind nur zum testen
-    c=c[:50]
-
-    x = np.asarray(x)[:50]
-    y = np.asarray(y)[:50]
-    z = np.asarray(z)[:50]
-    #print(x)
-    #print(y)
-    x_midpts = np.hstack((x[0], 0.5 * (x[1:] + x[:-1]), x[-1]))
-    y_midpts = np.hstack((y[0], 0.5 * (y[1:] + y[:-1]), y[-1]))
-    z_midpts = np.hstack((z[0], 0.5 * (z[1:] + z[:-1]), z[-1]))
-
-    coord_start = np.column_stack((x_midpts[:-1], y_midpts[:-1], z_midpts[:-1]))[:, np.newaxis, :]
-    #print("coord_start:\n", coord_start)
-    coord_mid = np.column_stack((x, y, z))[:, np.newaxis, :]
-    #print("coord_mid:\n", coord_mid)
-    coord_end = np.column_stack((x_midpts[1:], y_midpts[1:], z_midpts[:-1]))[:, np.newaxis, :]
-    #print("coord_end:\n", coord_end)
-    segments = np.concatenate((coord_start, coord_mid, coord_end), axis=1)
-    #print("coord_segments:\n", segments)
-
-    lc = Line3DCollection(segments, **default_kwargs)
-    lc.set_array(c)  # set the colors of each segment
-    #print(lc)
-    
-    return ax.add_collection3d(lc)
-
-color = np.linspace(0, 2, 5001)
+color = np.linspace(0, 2, step_count + 1)
 
 # Update-Funktion für c-Parameter
 def c_update(c):
-    xs[0], ys[0], zs[0] = starting_point
-    for i in range(step_count):
-        x_dot, y_dot, z_dot = Rossler(xs[i], ys[i], zs[i], 0.2, 0.2, c)
-        xs[i+1] = xs[i] + (x_dot*dt)
-        ys[i+1] = ys[i] + (y_dot*dt)
-        zs[i+1] = zs[i] + (z_dot*dt)
 
-    for coll in list(ax.collections):
-        coll.remove #??????warum geht das nicht
-    _lines = colored_line(xs, ys, zs, color, ax, cmap="viridis")
+    t1 = time()
+
+    xs[0], ys[0], zs[0] = starting_point
+    derivative = []
+
+    for i in range(step_count):
+        der = Rossler(xs[i], ys[i], zs[i], 0.2, 0.2, c)
+        derivative.append(der)
+
+        xs[i+1] = xs[i] + (der[0]*dt)
+        ys[i+1] = ys[i] + (der[1]*dt)
+        zs[i+1] = zs[i] + (der[2]*dt)
+    
+
+    t15 = time()
+    
+    derivative_arr = np.array(derivative)
+    derivative_norm = np.absolute(derivative_arr.T[0]) + np.absolute(derivative_arr.T[0]) + np.absolute(derivative_arr.T[0])
+
+    t2 = time()
+
+    points_eff = []
+    print(len(derivative_norm))
+    sum = 0
+    acc = 25
+    for i in range(step_count):
+        sum += derivative_norm[i]
+        if sum > acc:
+            points_eff.append([xs[i], ys[i], zs[i]])
+            sum -= acc * (sum // acc)
+    print(len(points_eff))
+
+    # a = [points_eff[j][2] == zs[j] for j in range(len(points_eff))]
+    # print(a)
+
+    points_eff_arr = np.array(points_eff).T
+    # b = (points_eff_arr == np.array([xs, ys, zs])[:len(points_eff)])
+    # print(b)
+    # print(points_eff_arr)
+    # print(len(points_eff_arr))
+
+
+    for coll in ax.collections:
+        coll.remove()
+
+    t3 = time()
+
+    colored_3d_line(ax, points_eff_arr, color)
     fig.canvas.draw_idle()
+
+    t4 = time()
+
+    print(t15-t1, t2-t15, t3-t2, t4-t3)
 
 # Initialisierung von ax mit Trajektorie des Rösler Systems für c = c_init
 c_update(c_init)
