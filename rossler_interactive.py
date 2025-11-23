@@ -9,7 +9,7 @@ def Rossler(x, y, z, a, b, c):
     x_dot = - y - z
     y_dot = x + a * y
     z_dot = b + x * z - c * z
-    return np.array([x_dot, y_dot, z_dot])
+    return x_dot, y_dot, z_dot
 
 # Parameter des Systems
 a, b = 0.2, 0.2
@@ -65,20 +65,21 @@ def c_update(c):
     t1 = time()
 
     xs[0], ys[0], zs[0] = starting_point
-    derivative = []
+    # derivative = []
 
     for i in range(step_count):
         der = Rossler(xs[i], ys[i], zs[i], 0.2, 0.2, c)
-        derivative.append(der)
+        # derivative.append(der)
 
         xs[i+1] = xs[i] + (der[0]*dt)
         ys[i+1] = ys[i] + (der[1]*dt)
         zs[i+1] = zs[i] + (der[2]*dt)
-    
 
     t15 = time()
     
-    derivative_arr = np.array(derivative)
+    
+    # derivative_arr = np.array(derivative)
+    derivative_arr = np.ones((step_count,3))
     derivative_norm = np.absolute(derivative_arr.T[0]) + np.absolute(derivative_arr.T[0]) + np.absolute(derivative_arr.T[0])
 
     t2 = time()
