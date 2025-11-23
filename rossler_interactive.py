@@ -20,7 +20,7 @@ starting_point = (1.0, 1.0, 1.0)
 
 # Schrittweite und -zahl der Simulation
 dt = 0.01
-step_count = 50000
+step_count = 5000
 
 # Koordinatenschranke
 plot_limit = 6.0
@@ -33,10 +33,54 @@ zs=np.empty((step_count + 1,))
 # Erstellen von Figure- und Axes-Objekten
 fig = plt.figure()
 ax = fig.add_subplot(projection="3d")
+print(ax)
 fig.subplots_adjust(bottom=0.2, left=0.15)
 l, = ax.plot([], [], [], lw=0.5)
 
 plt.title("Rössler-Attraktor")
+
+import warnings #wieder entfernen
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
+
+
+def colored_line(x, y, z, c, ax, **lc_kwargs):
+    
+    if "array" in lc_kwargs:
+        warnings.warn('The provided "array" keyword argument will be overridden')
+
+    # Kp was das macht, war schon da
+    default_kwargs = {"capstyle": "butt"}
+    default_kwargs.update(lc_kwargs)
+
+
+    #Die "50" sind nur zum testen
+    c=c[:50]
+
+    x = np.asarray(x)[:50]
+    y = np.asarray(y)[:50]
+    z = np.asarray(z)[:50]
+    #print(x)
+    #print(y)
+    x_midpts = np.hstack((x[0], 0.5 * (x[1:] + x[:-1]), x[-1]))
+    y_midpts = np.hstack((y[0], 0.5 * (y[1:] + y[:-1]), y[-1]))
+    z_midpts = np.hstack((z[0], 0.5 * (z[1:] + z[:-1]), z[-1]))
+
+    coord_start = np.column_stack((x_midpts[:-1], y_midpts[:-1], z_midpts[:-1]))[:, np.newaxis, :]
+    #print("coord_start:\n", coord_start)
+    coord_mid = np.column_stack((x, y, z))[:, np.newaxis, :]
+    #print("coord_mid:\n", coord_mid)
+    coord_end = np.column_stack((x_midpts[1:], y_midpts[1:], z_midpts[:-1]))[:, np.newaxis, :]
+    #print("coord_end:\n", coord_end)
+    segments = np.concatenate((coord_start, coord_mid, coord_end), axis=1)
+    #print("coord_segments:\n", segments)
+
+    lc = Line3DCollection(segments, **default_kwargs)
+    lc.set_array(c)  # set the colors of each segment
+    #print(lc)
+    
+    return ax.add_collection3d(lc)
+
+color = np.linspace(0, 2, 5001)
 
 # Update-Funktion für c-Parameter
 def c_update(c):
@@ -46,7 +90,10 @@ def c_update(c):
         xs[i+1] = xs[i] + (x_dot*dt)
         ys[i+1] = ys[i] + (y_dot*dt)
         zs[i+1] = zs[i] + (z_dot*dt)
-    l.set_data_3d(xs, ys, zs)
+
+    for coll in list(ax.collections):
+        coll.remove #??????warum geht das nicht
+    _lines = colored_line(xs, ys, zs, color, ax, cmap="viridis")
     fig.canvas.draw_idle()
 
 # Initialisierung von ax mit Trajektorie des Rösler Systems für c = c_init
