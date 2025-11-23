@@ -22,7 +22,7 @@ starting_point = (1.0, 1.0, 1.0)
 
 # Schrittweite und -zahl der Simulation
 dt = 0.01
-step_count = 50000
+step_count = 30000
 
 # Koordinatenschranke
 plot_limit = 6.0
@@ -79,38 +79,40 @@ def c_update(c):
     
     
     # derivative_arr = np.array(derivative)
-    derivative_arr = np.ones((step_count,3))
-    derivative_norm = np.absolute(derivative_arr.T[0]) + np.absolute(derivative_arr.T[0]) + np.absolute(derivative_arr.T[0])
+    # print(derivative_arr)
+    # # derivative_arr = 25*np.ones((step_count,3))
+    # derivative_norm = np.absolute(derivative_arr.T[0]) + np.absolute(derivative_arr.T[0]) + np.absolute(derivative_arr.T[0])
 
     t2 = time()
 
-    points_eff = []
-    print(len(derivative_norm))
-    sum = 0
-    acc = 25
-    for i in range(step_count):
-        sum += derivative_norm[i]
-        if sum > acc:
-            points_eff.append([xs[i], ys[i], zs[i]])
-            sum -= acc * (sum // acc)
-    print(len(points_eff))
+    # points_eff = []
+    # print(len(derivative_norm))
+    # sum = 0
+    # acc = 1
+    # for i in range(step_count):
+    #     sum += derivative_norm[i]
+    #     if sum > acc:
+    #         points_eff.append([xs[i], ys[i], zs[i]])
+    #         sum -= acc * (sum // acc)
+    # print(len(points_eff))
 
-    # a = [points_eff[j][2] == zs[j] for j in range(len(points_eff))]
-    # print(a)
+    # # a = [points_eff[j][2] == zs[j] for j in range(len(points_eff))]
+    # # print(a)
 
-    points_eff_arr = np.array(points_eff).T
-    # b = (points_eff_arr == np.array([xs, ys, zs])[:len(points_eff)])
-    # print(b)
-    # print(points_eff_arr)
-    # print(len(points_eff_arr))
+    # points_eff_arr = np.array(points_eff).T
+    # # b = (points_eff_arr == np.array([xs, ys, zs])[:len(points_eff)])
+    # # print(b)
+    # # print(points_eff_arr)
+    # # print(len(points_eff_arr))
 
 
     for coll in ax.collections:
         coll.remove()
 
     t3 = time()
+    print(np.array([xs,ys,zs])[:100])
 
-    colored_3d_line(ax, points_eff_arr, color)
+    colored_3d_line(ax, np.array([xs,ys,zs])[:100], color)
     fig.canvas.draw_idle()
 
     t4 = time()
