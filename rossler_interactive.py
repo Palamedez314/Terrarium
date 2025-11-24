@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, TextBox, Button
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 import matplotlib as mpl
-mpl.rcParams['axes3d.mouserotationstyle'] = 'azel'  
+#mpl.rcParams['axes3d.mouserotationstyle'] = 'azel'  
 
 # Rössler-System
 def Rossler(x, y, z, a, b, c):
@@ -17,7 +17,6 @@ a, b = 0.2, 0.2
 c_init = 2.9
 c_min = 2
 c_max = 7
-c_current = c_init
 
 # Startpunkt der Trajektorie zu Beginn
 starting_point = [1.0, 1.0, 1.0]
@@ -61,8 +60,6 @@ def colored_3d_line(x, y, z, ax, **lc_kwargs):
 
 # Update-Funktion für c-Parameter
 def c_update(c):
-    global c_current
-    c_current = c
     xs[0], ys[0], zs[0] = starting_point
 
     # Iterierte Simulation des Rössler-Systems
@@ -104,21 +101,32 @@ vslider = Slider(vslideraxis, label='Zoom',
 vslider.on_changed(zoom_update)
 
 # Erstellen von TextBoxen und Button
-textbox_x_ax = fig.add_axes([0.85,0.9,0.1,0.05])
-textbox_x = TextBox(textbox_x_ax,"X-Wert","1.0")
-textbox_x.on_submit(lambda x_str : (starting_point.pop(0),starting_point.insert(0,float(x_str))))
 
-textbox_y_ax = fig.add_axes([0.85,0.85,0.1,0.05])
-textbox_y = TextBox(textbox_y_ax,"Y-Wert","1.0")
-textbox_y.on_submit(lambda y_str : (starting_point.pop(1),starting_point.insert(1,float(y_str))))
+error_text = plt.text(1.97,-0.5,"",horizontalalignment="center",color="tab:red")
 
-textbox_z_ax = fig.add_axes([0.85,0.8,0.1,0.05])
-textbox_z = TextBox(textbox_z_ax,"Z-Wert","1.0")
-textbox_z.on_submit(lambda z_str : (starting_point.pop(2),starting_point.insert(2,float(z_str))))
+def change_starting_point(text,index):
+    try:
+        starting_point[index] = float(text)
+    except ValueError:
+        error_text.set(text="Bitte Zahlen eingeben")
+    else:
+        error_text.set(text="")
 
-submit_button_ax = fig.add_axes([0.86,0.75,0.08,0.04])
+textbox_x_ax = fig.add_axes([0.85,0.6,0.1,0.05])
+textbox_x = TextBox(textbox_x_ax,"X-Wert",str(starting_point[0]))
+textbox_x.on_submit(lambda x_str: change_starting_point(x_str,0))
+
+textbox_y_ax = fig.add_axes([0.85,0.55,0.1,0.05])
+textbox_y = TextBox(textbox_y_ax,"Y-Wert",str(starting_point[1]))
+textbox_y.on_submit(lambda y_str: change_starting_point(y_str,1))
+
+textbox_z_ax = fig.add_axes([0.85,0.5,0.1,0.05])
+textbox_z = TextBox(textbox_z_ax,"Z-Wert",str(starting_point[2]))
+textbox_z.on_submit(lambda z_str: change_starting_point(z_str,2))
+
+submit_button_ax = fig.add_axes([0.86,0.45,0.08,0.04])
 submit_button = Button(submit_button_ax,"Submit")
-submit_button.on_clicked(lambda _clicked : c_update(c_current))
+submit_button.on_clicked(lambda _clicked : c_update(hslider.val))
 
 
 # Anzeigen des Plots
