@@ -155,7 +155,6 @@ textbox_z = TextBox(textbox_z_ax,"Z",str(starting_point[2]))
 textbox_z.on_submit(lambda z_str: change_starting_point(z_str,2))
 
 submit_button_ax = fig.add_axes([0.86,0.45,0.08,0.04])
-submit_button_ax = fig.add_axes([0.86,0.45,0.08,0.04])
 submit_button = Button(submit_button_ax,"Submit")
 submit_button.on_clicked(lambda _clicked : c_update(hslider.val))
 
