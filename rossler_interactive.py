@@ -21,8 +21,8 @@ c_current = c_init
 starting_point = [1.0, 1.0, 1.0]
 
 # Schrittweite und -zahl der Simulation
-dt = 0.05
-step_count = 10000
+dt = 0.01
+step_count = 50000
 
 
 # Koordinatenschranke
@@ -36,7 +36,7 @@ zs=np.empty((step_count + 1,))
 # Erstellen von Figure- und Axes-Objekten
 fig = plt.figure()
 ax = fig.add_subplot(projection="3d")
-print(ax)
+# print(ax)
 fig.subplots_adjust(bottom=0.2, left=0.15)
 l, = ax.plot([], [], [], lw=0.5)
 
@@ -51,7 +51,7 @@ def colored_3d_line(x, y, z, ax, **lc_kwargs):
     # print(np.array([x, y, z]))
     points = np.array([x, y, z]).T.reshape(-1, 1, 3)
     # print(points)
-    segs = np.concatenate([points[i::(line_len-1)][:(len(points)//line_len)] for i in range(line_len)], axis=1)
+    segs = np.concatenate([points[i::(line_len-1)][:(len(points)//(line_len))] for i in range(line_len)], axis=1)
     # print(segs)
     # Normalize mappt die segmente linear auf [0,1]; für colormap
     rgba = np.array([(i/len(segs) ,0 , 1 - i/len(segs), 1) for i in range(len(segs))])
@@ -65,6 +65,7 @@ def colored_3d_line(x, y, z, ax, **lc_kwargs):
 # Update-Funktion für c-Parameter
 def c_update(c):
     # print(starting_point)
+    global c_current
     c_current = c
     xs[0], ys[0], zs[0] = starting_point
     for i in range(step_count):
