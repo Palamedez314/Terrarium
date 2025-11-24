@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, TextBox, Button
+from matplotlib import colors
 
 # Rössler-System
 def Rossler(x, y, z, a, b, c):
@@ -21,7 +22,7 @@ starting_point = [1.0, 1.0, 1.0]
 
 # Schrittweite und -zahl der Simulation
 dt = 0.05
-step_count = 5000
+step_count = 10000
 
 
 # Koordinatenschranke
@@ -41,66 +42,29 @@ l, = ax.plot([], [], [], lw=0.5)
 
 plt.title("Rössler-Attraktor")
 
-import warnings #wieder entfernen
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 
-def colored_line(x, y, z, c, ax, **lc_kwargs):
-    
-    if "array" in lc_kwargs:
-        warnings.warn('The provided "array" keyword argument will be overridden')
-
-    # Kp was das macht, war schon da
-    default_kwargs = {"capstyle": "butt"}
-    default_kwargs.update(lc_kwargs)
-
-
-    #Die "50" sind nur zum testen
-    c=c[:5]
-
-    x = np.asarray(x)[:5]
-    y = np.asarray(y)[:5]
-    z = np.asarray(z)[:5]
-    #print(x)
-    #print(y)
-    x_midpts = np.hstack((x[0], 0.5 * (x[1:] + x[:-1]), x[-1]))
-    y_midpts = np.hstack((y[0], 0.5 * (y[1:] + y[:-1]), y[-1]))
-    z_midpts = np.hstack((z[0], 0.5 * (z[1:] + z[:-1]), z[-1]))
-
-    coord_start = np.column_stack((x_midpts[:-1], y_midpts[:-1], z_midpts[:-1]))[:, np.newaxis, :]
-    #print("coord_start:\n", coord_start)
-    coord_mid = np.column_stack((x, y, z))[:, np.newaxis, :]
-    #print("coord_mid:\n", coord_mid)
-    coord_end = np.column_stack((x_midpts[1:], y_midpts[1:], z_midpts[1:]))[:, np.newaxis, :]
-    #print("coord_end:\n", coord_end)
-    segments = np.concatenate((coord_start, coord_mid, coord_end), axis=1)
-    #print("coord_segments:\n", segments)
-
-    lc = Line3DCollection(segments, **default_kwargs)
-    lc.set_array(c)  # set the colors of each segment
-    #print(lc)
-    
-    return ax.add_collection3d(lc)
-
-def colored_3d_line(x, y, z, c, ax, **lc_kwargs):
+line_len = 1000
+def colored_3d_line(x, y, z, ax, **lc_kwargs):
     # Bau der Segmente
+    # print(np.array([x, y, z]))
     points = np.array([x, y, z]).T.reshape(-1, 1, 3)
-    #print(points)
-    segs = np.concatenate([points[:-1], points[1:]], axis=1)
-    #print(segs)
+    # print(points)
+    segs = np.concatenate([points[i::(line_len-1)][:(len(points)//line_len)] for i in range(line_len)], axis=1)
+    # print(segs)
     # Normalize mappt die segmente linear auf [0,1]; für colormap
-    lc = Line3DCollection(segs, norm=plt.Normalize(0,1),**lc_kwargs)
-    lc.set_array(c)
+    rgba = np.array([(i/len(segs) ,0 , 1 - i/len(segs), 1) for i in range(len(segs))])
+    lc = Line3DCollection(segs,colors = rgba, **lc_kwargs)
     lc.set_linewidth(0.8)
     ax.add_collection3d(lc)
     return lc
 
-color = np.linspace(0, 2, 5001)
 
 
 # Update-Funktion für c-Parameter
 def c_update(c):
-    print(starting_point)
+    # print(starting_point)
     c_current = c
     xs[0], ys[0], zs[0] = starting_point
     for i in range(step_count):
@@ -112,7 +76,7 @@ def c_update(c):
 
     for coll in ax.collections:
         coll.remove() 
-    _lines = colored_3d_line(xs, ys, zs, color, ax, cmap="hsv")
+    _lines = colored_3d_line(xs, ys, zs, ax)
     fig.canvas.draw_idle()
 
 # Initialisierung von ax mit Trajektorie des Rösler Systems für c = c_init
