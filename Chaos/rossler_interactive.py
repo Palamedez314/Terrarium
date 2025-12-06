@@ -4,8 +4,8 @@ from matplotlib.widgets import Slider, TextBox, Button, CheckButtons
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 # fix für komische 3D-Rotation für neue mathlib-Versionen:
-# import matplotlib as mpl
-# mpl.rcParams['axes3d.mouserotationstyle'] = 'azel'  
+import matplotlib as mpl
+mpl.rcParams['axes3d.mouserotationstyle'] = 'azel'  
 
 # Rössler-System
 def Rossler(x, y, z, a, b, c):
@@ -150,19 +150,19 @@ def change_starting_point(text,index):
         error_text.set(text="")
 
 textbox_x_ax = fig.add_axes([0.85,0.6,0.1,0.05])
-textbox_x = TextBox(textbox_x_ax,"X",
+textbox_x = TextBox(textbox_x_ax,"X ",
                     str(starting_point[0]))
 textbox_x.on_submit(lambda x_str: 
                     change_starting_point(x_str,0))
 
 textbox_y_ax = fig.add_axes([0.85,0.55,0.1,0.05])
-textbox_y = TextBox(textbox_y_ax,"Y",
+textbox_y = TextBox(textbox_y_ax,"Y ",
                     str(starting_point[1]))
 textbox_y.on_submit(lambda y_str: 
                     change_starting_point(y_str,1))
 
 textbox_z_ax = fig.add_axes([0.85,0.5,0.1,0.05])
-textbox_z = TextBox(textbox_z_ax,"Z",
+textbox_z = TextBox(textbox_z_ax,"Z ",
                     str(starting_point[2]))
 textbox_z.on_submit(lambda z_str: 
                     change_starting_point(z_str,2))

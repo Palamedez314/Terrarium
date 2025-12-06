@@ -4,8 +4,8 @@ from matplotlib.widgets import Slider, TextBox, Button, CheckButtons
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 # fix für komische 3D-Rotation für neue mathlib-Versionen:
-# import matplotlib as mpl
-# mpl.rcParams['axes3d.mouserotationstyle'] = 'azel' 
+import matplotlib as mpl
+mpl.rcParams['axes3d.mouserotationstyle'] = 'azel' 
 
 # Lorenz-System
 def Lorenz(x, y, z, sigma, b, r):
