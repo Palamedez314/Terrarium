@@ -32,6 +32,36 @@ result_log_path = "cluster-results/team-12-" + datasetname + ".result.log"
 df = pd.read_csv(data_path)
 data_list : list[list[float]] = df.to_numpy().tolist()
 
+############################################################################################
+# Provisorische Timer-Klasse (am Ende entfernen!)
+############################################################################################
+
+import time
+class TimerError(Exception):
+    """A custom exception used to report errors in use of Timer class"""
+class Timer:
+    def __init__(self):
+        self._start_time = None
+        self._timing_name : str
+
+    def start(self, name="Elapsed time"):
+        """Start a new timer"""
+        if self._start_time is not None:
+            raise TimerError(f"Timer is running. Use .stop() to stop it")
+        self._start_time = time.perf_counter()
+        assert type(name) == str
+        self._timing_name = name
+
+    def stop(self):
+        """Stop the timer, and report the elapsed time"""
+        if self._start_time is None:
+            raise TimerError(f"Timer is not running. Use .start() to start it")
+        elapsed_time = time.perf_counter() - self._start_time
+        self._start_time = None
+        print(f"{self._timing_name}: {elapsed_time:0.4f} seconds")
+
+timer = Timer()
+
 ####################################################################################################
 # Verarbeitung der Daten (ohne Verwendung der Module!)
 ####################################################################################################
@@ -52,7 +82,6 @@ for lattice_point in data_lattice_list:
 h_max_bar = max(density_dict.values())
 eps_bar = eps_factor * ((h_max_bar) ** .5)
 
-
 #rho_bar ist einfach nur step_count + 1, rho ist nur rho_bar mit Vorfaktor
 def survivingLatticePoints(step_count: int) -> set[tuple[int,...]]:
     return {lattice_point for lattice_point in data_lattice_list 
@@ -68,6 +97,7 @@ def cartesian_product(X : list[list]):
 def cartesian_potentiation(lst : list, dim : int):
     return cartesian_product([lst for _ in range(dim)])
 
+timer.start("tau_distance_set")
 # Intervall [-(int(tau_factor)+1), ... , int(tau_factor)+1] Reicht das ??
 eff_tau_interval_list = list(range(-int(tau_factor)-1,int(tau_factor)+2))
 
@@ -89,6 +119,7 @@ def eff_origin_distance(lattice_point: tuple[int,...]):
 
 # dist(box1, box2) < tau <=> eff_origin_distance() der Differenz der assoziierten lattice points < tau_factor (= tau/delta) 
 tau_distance_set = {lattice_point for lattice_point in tau_box if eff_origin_distance(lattice_point) < tau_factor}
+timer.stop()
 
 def epsDensityTest(component: set[tuple[int,...]], step_count : int) -> bool:
 
@@ -100,59 +131,138 @@ def epsDensityTest(component: set[tuple[int,...]], step_count : int) -> bool:
     #         return True
     # return False
 
-def connectedComponents(step_count: int) -> list[set[tuple[int,...]]]:
-    connected_component_list : list[set[tuple[int,...]]] = []
 
-    for lattice_point in survivingLatticePoints(step_count):
-        
-        # if step_count in [0]:
-        #     print(f"\nmerge {lattice_point} into\n{connected_component_list}")
-
-        neighbors = {tuple(map(sum, zip(lattice_point, diff))) for diff in tau_distance_set}
-        # ist das schneller:? = [tuple([sum(components) for components in zip(latticePoint, diff)])
-        #                         for diff in tau_box]
-        # TODO Schaut sich der Schnitt alle Elemente an -> ja! geht das schneller?
-        # TODO Schnitt besser, nicht die ganze Menge berechnen -> educated guess welche Methode besser ist
-        neighboring_component_indices = [i for i in range(len(connected_component_list)) if 
-                                         bool(neighbors & connected_component_list[i])]
-
-        # if step_count in [0]:
-        #     print(bool(neighboring_component_indices))
-
-        if neighboring_component_indices: # aka wenn ... nichtleer
-
-            # if step_count in [0]:
-            #     print(neighboring_component_indices)
-
-            min_index = neighboring_component_indices.pop(0)
-            final_component = connected_component_list[min_index]
-            # # richtig rum funktioniert nicht weil Rest der Liste sich verschiebt:
-            # for i in neighboring_component_indices:
-            #     final_component.update(connected_component_list.pop(i))
-            for i in reversed(neighboring_component_indices):
-                final_component.update(connected_component_list.pop(i))
-            final_component.add(lattice_point)
-            
-            # # Alternative: (geht das deleten noch besser?)
-            # merge_components = [connected_component_list[i] for i in neighboring_component_indices]
-            # final_component.update(*merge_components)
-            # for i in reversed(neighboring_component_indices):
-            #     del connected_component_list[i]
-        else:
-            connected_component_list.append({lattice_point})
-
+# Bestimmen der tau-Zusammenhangskomponenten von surviving_lattice_points durch Aufstellen eines Nähe-Graphen und Tiefensuche
+def connectedComponents(step_count : int) -> list[set[tuple[int,...]]]:
     
-    # Wäre es besser ein dictionary statt der Liste "connected_component_list" zu benutzen?
+    print("")
+    surviving_lattice_points = survivingLatticePoints(step_count)
+
+    print(surviving_lattice_points)
+
+    # lattice_large_box_dict = {point : tuple(map(lambda x: x // int(tau_factor), point)) for point in surviving_lattice_points}
+    large_boxes = {tuple(map(lambda x: x // int(tau_factor), point)) for point in surviving_lattice_points}
+    
+    # langsam aber allgemeineres Konzept:
+    # def singletonPreimageDict(d : dict) -> dict:
+    #   return {target_val : {key for key, val in d.items() if val == target_val} for target_val in d.values()}
+    # large_box_lattice_dict = singletonPreimageDict(lattice_large_box_dict)
+
+    # schneller:
+    timer.start("inverse_dict")
+    large_box_lattice_dict = {box : set(cartesian_product([list(range(int(tau_factor)*comp,int(tau_factor)*(comp+1))) for comp in box])) & surviving_lattice_points 
+                              for box in large_boxes}
+    timer.stop()
+
+    tau_connection_graph = {}
+    coord_shift = lambda coord : coord-1 if coord > 0 else -coord-1 if coord < 0 else 0
+    sub = lambda x, y : x - y
+    # large_boxes = large_box_lattice_dict.keys()
+    relative_neighbor_boxes = cartesian_potentiation(list(range(-1,1+1)), dim)
+    timer.start("box-loop")
+    # t1 = 0
+    # t2 = 0
+    # print(len(large_boxes))
+    for box in large_boxes:
+        # t2_start = time.perf_counter()
+        neighboring_boxes = {tuple(map(sum, zip(box, diff))) for diff in relative_neighbor_boxes} & large_boxes
+        # t2_stop = time.perf_counter()
+        # t2 += t2_stop- t2_start
+        # t1_start = time.perf_counter()
+        neighboring_lattice_points = set.union(*[large_box_lattice_dict[neighboring_box] for neighboring_box in neighboring_boxes])
+        # t1_stop = time.perf_counter()
+        # t1 += t1_stop - t1_start
+        # print(len(neighboring_lattice_points))
+        for new_point in large_box_lattice_dict[box]:
+            connected_points = {point for point in neighboring_lattice_points - {new_point}
+                                if max([coord_shift(coord) for coord in map(sub, point, new_point)]) < tau_factor}
+            tau_connection_graph[new_point] = connected_points
+    timer.stop()
+    # print(f"neigboring boxes: {t2:0.4f}")
+    # print(f"neighboring_lattice_points: {t1:0.4f}")
+
+
+    # tau_connection_graph2 : dict[tuple[int,...],set[tuple[int,...]]] = {}
+
+    # distance_calculations = 0
+    # # distance_calc_time = 0
+    # # set_creation_time = 0
+    # # graph_add_time = 0
+
+    # coord_shift = lambda coord : coord-1 if coord > 0 else -coord-1 if coord < 0 else 0
+    # sub = lambda x, y : x - y
+
+    # timer.start("alt")
+    # for new_point in surviving_lattice_points:
+
+    #     # set_creation_time_start = time.perf_counter()
+
+    #     old_points = list(tau_connection_graph2.keys())
+    #     # rel_points = [tuple(map(lambda x, y : x - y, point, new_point)) for point in old_points]
+
+    #     # distance_calc_time_start = time.perf_counter()
+    #     connected_points = [point for point in old_points if max([coord_shift(coord) for coord in map(sub, point, new_point)]) < tau_factor]
+    #     # distance_calc_time_stop = time.perf_counter()
+    #     # distance_calc_time += distance_calc_time_stop - distance_calc_time_start
+
+
+    #     tau_connection_graph2[new_point] = set(connected_points)
+
+    #     # set_creation_time_stop = time.perf_counter()
+    #     # set_creation_time += set_creation_time_stop  - set_creation_time_start
+
+    #     distance_calculations += len(old_points)
+
+    #     # graph_add_time_start = time.perf_counter()
+
+    #     for point in connected_points:
+    #         tau_connection_graph2[point].add(new_point)
+
+    #     # graph_add_time_stop = time.perf_counter()
+    #     # graph_add_time += graph_add_time_stop - graph_add_time_start
+
+    # # timer.stop()
+    # # print(f"with {distance_calculations} distance calculations from {len(surviving_lattice_points)} lattice points")
+    # # print(f"set creation time: {set_creation_time:0.4f}")
+    # # print(f"Of That: distance calculation time:{distance_calc_time:0.4f}\n")
+    # # print(f"time to add edges to the graph: {graph_add_time:0.4f}\n")
+    # timer.stop()
+
+    timer.start("finding components with dfs-alghorithm")
+
+    # Bestimmen der Komponenten des Graphen
+    component_list : list[set[tuple[int,...]]] = [] 
+    visited_vertices = set()
+    for vertex in surviving_lattice_points:
+        # Depth-first-search im Graphen tau_connection_graph ausgehend vom Knoten vertex (siehe Wikipedia-Pseudocode)
+        if vertex not in visited_vertices:
+            component = set()
+            stack = []
+            stack.append(vertex)
+            while bool(stack):
+                queued_vertex = stack.pop()
+                if queued_vertex not in component:
+                    component.add(queued_vertex)
+                    stack.extend(tau_connection_graph[queued_vertex])
+            visited_vertices.update(component)
+            component_list.append(component)
+    timer.stop()
+
+    timer.start("packing together the data")
     surviving_list : list[bool] = [epsDensityTest(component,step_count) 
-                                   for component in connected_component_list]
-    surviving_components = [component for component, survived in zip(connected_component_list,surviving_list) if survived]
+                                   for component in component_list]
+    surviving_components = [component for component, survived in zip(component_list,surviving_list) if survived]
     dead_components : set[tuple[int,...]] = set.union(*[component for component, survived 
-                                                        in zip(connected_component_list,surviving_list) 
+                                                        in zip(component_list,surviving_list) 
                                                         if not survived]) if False in surviving_list else set()
-    
+    # 0-te Komponente beinhaltet Kästchen, die zu keiner überlebenden Komponente gehören
     surviving_components.insert(0,dead_components)
+    timer.stop()
 
     return surviving_components
+
+
+
 
 # woanders hin?
 step_count_limit = 10000
@@ -164,9 +274,11 @@ while connected_component_count == 1:
     if step_count > step_count_limit:
         raise RuntimeError(f"Clustering nach {step_count_limit} Versuchen abgebrochen")
     
+    # timer.start("connectedComponents("+ str(step_count) + ")")
     connected_component_list = connectedComponents(step_count)
     connected_component_count = len(connected_component_list) - 1
     step_count += 1
+    # timer.stop()
 
 if connected_component_count == 0:
     clustered_data = [[1] + point for point in data_list]
@@ -178,16 +290,10 @@ else:
                         for component,data_point in zip(connected_component_list,data_list) 
                         if tuple(data_point) in component]
     
-####################################################################################################
-# Visualisierung
-####################################################################################################
 
-# print(tau_factor)
-# lst = list(tau_distance_set)
-# x = [point[0] for point in lst]
-# y = [point[1] for point in lst]
-# plt.scatter(x, y)
-# plt.show()
+############################################################################################ 
+# Visualisierung
+############################################################################################ 
 
 if dim == 2:
     for i in [0,step_count-1]:
@@ -222,7 +328,6 @@ if dim == 2:
 
 # result_data_frame = pd.DataFrame(clustered_data(data_list))
 # result_data_frame.to_csv(result_path, index=False)
-
 
 
 # TODO (global):
