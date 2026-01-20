@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -20,7 +22,6 @@ def prase_args():
     parser.add_argument("-n", "--norm", type=float, default=float("inf"), help="tbd")
     return parser.parse_args()
 
-
 ############################################################################################
 # Provisorische Timer-Klasse (am Ende entfernen!)
 ############################################################################################
@@ -30,32 +31,89 @@ class TimerError(Exception):
     """A custom exception used to report errors in use of Timer class"""
 class Timer:
     def __init__(self):
-        self._start_time = None
-        self._timing_name : str
+        self._start_times : dict[str,float] = {}
+        self._timing_descriptions : dict[str,str] = {}
+        self._cumul_times : dict[str,float] = {}
 
-    def start(self, name="Elapsed time"):
+    def start_variable(self, varname:str, description:str=""):
+        """Start timer with name varname"""
+        assert type(varname) == str
+        if varname in self._start_times.keys():
+            raise TimerError(f"Timer is running. Use .stop()/.stop_variable to stop it")
+        self._start_times[varname] = time.perf_counter()
+        assert type(description) == str
+        if description == "":
+            description = varname
+        self._timing_descriptions[varname] = description
+
+    def print_variable(self, varname, val, cumul:bool=False):
+        assert type(varname) == str
+        if cumul:
+            print(f"{self._timing_descriptions[varname]}: {val:0.4f} seconds (cumul)")
+        else:
+            print(f"{self._timing_descriptions[varname]}: {val:0.4f} seconds")
+
+    def stop_variable(self, varname:str, print_single:bool=True, print_cumul:bool=False):
+        """Stop timer with name varname"""
+        assert type(varname) == str
+        if varname not in self._start_times.keys():
+            raise TimerError(f"Timer is not running. Use .start()/.start_variable() to start it")
+        elapsed_time = time.perf_counter() - self._start_times.pop(varname)
+        if print_single:
+            self.print_variable(varname, elapsed_time, cumul=False)
+        if print_cumul:
+            cumul_time = self._cumul_times.pop(varname, 0) + elapsed_time
+            self.print_variable(varname, cumul_time, cumul=False)
+        else:
+            self._cumul_times.pop(varname, 0)
+
+    def print_cumul_variable(self, varname:str):
+        if varname not in self._cumul_times.keys():
+            raise TimerError(f"Timer has no recorded time yet. Use .start()/.start_variable() and .pause()/.pause_variable() to record time values")
+        self.print_variable(varname, self._cumul_times[varname], cumul=True)
+
+    def pause_variable(self, varname:str, print_single:bool=False, print_cumul:bool=False) :
+        assert type(varname) == str
+        if varname not in self._start_times.keys():
+            raise TimerError(f"Timer is not running. Use .start()/.start_variable() to start it")
+        elapsed_time = time.perf_counter() - self._start_times.pop(varname)
+        if varname not in self._cumul_times.keys():
+            self._cumul_times[varname] = elapsed_time
+        else:
+            self._cumul_times[varname] += elapsed_time
+        if print_single:
+            self.print_variable(varname, elapsed_time, cumul=False)
+        if print_cumul:
+            self.print_cumul_variable(varname)
+
+    def start(self, description="Elapsed time"):
         """Start a new timer"""
-        if self._start_time is not None:
-            raise TimerError(f"Timer is running. Use .stop() to stop it")
-        self._start_time = time.perf_counter()
-        assert type(name) == str
-        self._timing_name = name
+        self.start_variable("standard", description)
 
-    def stop(self):
+    def stop(self, print_single:bool=True, print_cumul:bool=False):
         """Stop the timer, and report the elapsed time"""
-        if self._start_time is None:
-            raise TimerError(f"Timer is not running. Use .start() to start it")
-        elapsed_time = time.perf_counter() - self._start_time
-        self._start_time = None
-        print(f"{self._timing_name}: {elapsed_time:0.4f} seconds")
+        self.stop_variable("standard", print_single=print_single, print_cumul=print_cumul)
 
+    def pause(self, print_single:bool=False, print_cumul:bool=False):
+        self.pause_variable("standard", print_single=print_single, print_cumul=print_cumul)
+    
+    def print_cumul(self):
+        self.print_cumul_variable("standard")
+    
 timer = Timer()
+
+############################################################################################
+# Haupt-Methoden
+############################################################################################
 
 
 #rho_bar ist einfach nur step_count + 1, rho ist nur rho_bar mit Vorfaktor
 def survivingLatticePoints(step_count, data_lattice_list, density_dict):
-    return {lp for lp in data_lattice_list
+    print(len(data_lattice_list))
+    l = {lp for lp in data_lattice_list
         if density_dict[lp] > step_count}
+    print(len(list(l)))
+    return l
 
 def cartesian_product(X : list[list]):
     dim = len(X)
@@ -66,8 +124,6 @@ def cartesian_product(X : list[list]):
 
 def cartesian_potentiation(lst : list, dim : int):
     return cartesian_product([lst for _ in range(dim)])
-
-
 
 def eff_origin_distance(lattice_point: tuple[int,...], norm):
     # TODO: wie schlimm ist die Code-Dopplung?
@@ -98,18 +154,18 @@ def epsDensityTest(component: set[tuple[int,...]], step_count : int, density_dic
 # Bestimmen der tau-Zusammenhangskomponenten von surviving_lattice_points durch Aufstellen eines Nähe-Graphen und Tiefensuche
 def connectedComponents(data_lattice_list, density_dict, tau_factor, step_count, norm, eps_bar) -> list[set[tuple[int,...]]]:
     
-    
+    timer.start_variable("surviving_lattice_points")
     surviving_lattice_points = survivingLatticePoints(step_count, data_lattice_list, density_dict)
+    timer.pause_variable("surviving_lattice_points")
     dim = len(next(iter(surviving_lattice_points)))
-    timer.start("tau_distance_set")
+    timer.start_variable("tau_distance_sets")
 
     eff_tau_interval_list = list(range(-int(tau_factor)-1, int(tau_factor)+2))
     tau_box = cartesian_potentiation(eff_tau_interval_list, dim)
 
-    tau_distance_set = { lattice_point for lattice_point in tau_box
-    if eff_origin_distance(lattice_point, norm) < tau_factor}
+    tau_distance_set = { lattice_point for lattice_point in tau_box if eff_origin_distance(lattice_point, norm) < tau_factor}
 
-    timer.stop()
+    timer.pause_variable("tau_distance_sets")
     # lattice_large_box_dict = {point : tuple(map(lambda x: x // int(tau_factor), point)) for point in surviving_lattice_points}
     large_boxes = {tuple(map(lambda x: x // int(tau_factor), point)) for point in surviving_lattice_points}
     
@@ -119,17 +175,17 @@ def connectedComponents(data_lattice_list, density_dict, tau_factor, step_count,
     # large_box_lattice_dict = singletonPreimageDict(lattice_large_box_dict)
 
     # schneller:
-    timer.start("inverse_dict")
+    timer.start_variable("inverse_dicts")
     large_box_lattice_dict = {box : set(cartesian_product([list(range(int(tau_factor)*comp,int(tau_factor)*(comp+1))) for comp in box])) & surviving_lattice_points 
                               for box in large_boxes}
-    timer.stop()
+    timer.pause_variable("inverse_dicts")
 
     tau_connection_graph = {}
     coord_shift = lambda coord : coord-1 if coord > 0 else -coord-1 if coord < 0 else 0
     sub = lambda x, y : x - y
     # large_boxes = large_box_lattice_dict.keys()
     relative_neighbor_boxes = cartesian_potentiation(list(range(-1,1+1)), dim)
-    timer.start("box-loop")
+    timer.start_variable("box_loops")
     # t1 = 0
     # t2 = 0
     # print(len(large_boxes))
@@ -147,7 +203,7 @@ def connectedComponents(data_lattice_list, density_dict, tau_factor, step_count,
             connected_points = {point for point in neighboring_lattice_points - {new_point}
             if tuple(map(sub, point, new_point)) in tau_distance_set}
             tau_connection_graph[new_point] = connected_points
-    timer.stop()
+    timer.pause_variable("box_loops")
     # print(f"neigboring boxes: {t2:0.4f}")
     # print(f"neighboring_lattice_points: {t1:0.4f}")
 
@@ -198,7 +254,7 @@ def connectedComponents(data_lattice_list, density_dict, tau_factor, step_count,
     # # print(f"time to add edges to the graph: {graph_add_time:0.4f}\n")
     # timer.stop()
 
-    timer.start("finding components with dfs-alghorithm")
+    timer.start_variable("dfs_algorithm")
 
     # Bestimmen der Komponenten des Graphen
     component_list : list[set[tuple[int,...]]] = [] 
@@ -216,9 +272,8 @@ def connectedComponents(data_lattice_list, density_dict, tau_factor, step_count,
                     stack.extend(tau_connection_graph[queued_vertex])
             visited_vertices.update(component)
             component_list.append(component)
-    timer.stop()
+    timer.pause_variable("dfs_algorithm")
 
-    timer.start("packing together the data")
     surviving_list : list[bool] = [epsDensityTest(component, step_count, density_dict, eps_bar) 
                                    for component in component_list]
     surviving_components = [component for component, survived in zip(component_list,surviving_list) if survived]
@@ -227,7 +282,6 @@ def connectedComponents(data_lattice_list, density_dict, tau_factor, step_count,
                                                         if not survived]) if False in surviving_list else set()
     # 0-te Komponente beinhaltet Kästchen, die zu keiner überlebenden Komponente gehören
     surviving_components.insert(0,dead_components)
-    timer.stop()
 
     return surviving_components
 
@@ -301,11 +355,11 @@ def plot_clusters(clustered_data: list[list], path):
         ys_c = [y for y, l in zip(ys, labels) if l == cluster_id]
         if cluster_id == 0:
             color = "lightgray"
-            plt.scatter(xs_c, ys_c, s=10, c=color)
+            plt.scatter(xs_c, ys_c, s=5, c=color)
         else:
-            plt.scatter(xs_c, ys_c, s=10)
+            plt.scatter(xs_c, ys_c, s=5)
 
-    plt.savefig(path)
+    plt.savefig(path, dpi=800)
     plt.close()
 
 
@@ -319,7 +373,6 @@ def plot_clusters(clustered_data: list[list], path):
 ####################################################################################################
 
 def main():
-    timer = Timer()
     args = prase_args()
 
     datasetname = args.datasetname
@@ -367,9 +420,11 @@ def main():
     while connected_component_count == 1:
         if step_count > step_count_limit:
             raise RuntimeError(f"Clustering nach {step_count_limit} Versuchen abgebrochen")
+        timer.start_variable("connectedComponents")
         connected_component_list = connectedComponents(
             data_lattice_list, density_dict, tau_factor, step_count, norm, eps_bar
         )
+        timer.pause_variable("connectedComponents")
         connected_component_count = len(connected_component_list) - 1
         step_count += 1
 
@@ -386,10 +441,15 @@ def main():
                     break
             clustered_data.append([cluster_id] + pt)
 
+    timer.start_variable("plotting")
+
     # 2D Plots
     if dim == 2:
-        plot_dataset(data_list, result_picture_data)
+        plot_dataset([tuple(item) for item in data_list] , result_picture_data)
         plot_clusters(clustered_data, result_picture_clusters)
+    
+    timer.pause_variable("plotting")
+
 
 # result_data_frame = pd.DataFrame(clustered_data(data_list))
 # result_data_frame.to_csv(result_path, index=False)
@@ -403,4 +463,18 @@ def main():
 
 
 if __name__ == "__main__":
+
+    timer.start()
     main()
+    timer.stop()
+    timer.print_cumul_variable("surviving_lattice_points")
+    timer.print_cumul_variable("tau_distance_sets")
+    timer.print_cumul_variable("inverse_dicts")
+    timer.print_cumul_variable("box_loops")
+    timer.print_cumul_variable("dfs_algorithm")
+    timer.print_cumul_variable("connectedComponents")
+    timer.print_cumul_variable("plotting")
+
+# Berechtigung zum ausführen (u oder a)
+#!/usr/bin/python3???
+# aufpassen mit Windows/Linus (ein /r was Probleme macht?)
