@@ -16,7 +16,7 @@ class CustomTimer:
         """Start timer with name varname"""
         assert type(varname) == str
         if varname in self._start_times.keys():
-            raise TimerError(f"Timer is running. Use .stop()/.stop_variable to stop it")
+            raise TimerError(f"Timer \"{varname}\" is running. Use .stop()/.stop_variable or .pause()/.pause_variable to stop it")
         self._start_times[varname] = time.perf_counter()
         assert type(description) == str
         if description == "":
@@ -34,7 +34,7 @@ class CustomTimer:
         """Stop timer with name varname"""
         assert type(varname) == str
         if varname not in self._start_times.keys():
-            raise TimerError(f"Timer is not running. Use .start()/.start_variable() to start it")
+            raise TimerError(f"Timer \"{varname}\" is not running. Use .start()/.start_variable() to start it")
         elapsed_time = time.perf_counter() - self._start_times.pop(varname)
         if print_single:
             self.print_variable(varname, elapsed_time, cumul=False)
@@ -46,13 +46,13 @@ class CustomTimer:
 
     def print_cumul_variable(self, varname:str):
         if varname not in self._cumul_times.keys():
-            raise TimerError(f"Timer has no recorded time yet. Use .start()/.start_variable() and .pause()/.pause_variable() to record time values")
+            raise TimerError(f"Timer \"{varname}\" has no recorded time yet. Use .start()/.start_variable() to record time values")
         self.print_variable(varname, self._cumul_times[varname], cumul=True)
 
     def pause_variable(self, varname:str, print_single:bool=False, print_cumul:bool=False) :
         assert type(varname) == str
         if varname not in self._start_times.keys():
-            raise TimerError(f"Timer is not running. Use .start()/.start_variable() to start it")
+            raise TimerError(f"Timer \"{varname}\" is not running. Use .start()/.start_variable() to start it")
         elapsed_time = time.perf_counter() - self._start_times.pop(varname)
         if varname not in self._cumul_times.keys():
             self._cumul_times[varname] = elapsed_time
