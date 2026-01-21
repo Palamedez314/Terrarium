@@ -109,10 +109,10 @@ timer = Timer()
 
 #rho_bar ist einfach nur step_count + 1, rho ist nur rho_bar mit Vorfaktor
 def survivingLatticePoints(step_count, data_lattice_list, density_dict):
-    print(len(data_lattice_list))
+    # print(len(data_lattice_list))
     l = {lp for lp in data_lattice_list
         if density_dict[lp] > step_count}
-    print(len(list(l)))
+    # print(len(list(l)))
     return l
 
 def cartesian_product(X : list[list]):
@@ -125,26 +125,28 @@ def cartesian_product(X : list[list]):
 def cartesian_potentiation(lst : list, dim : int):
     return cartesian_product([lst for _ in range(dim)])
 
-def eff_origin_distance(lattice_point: tuple[int,...], norm):
-    # TODO: wie schlimm ist die Code-Dopplung?
-    if norm == float("inf"):
-        eff_abs_lattice_point_list = [coord-1 if coord > 0 else -coord-1 if coord < 0 else 0 for coord in lattice_point]
-        return max(eff_abs_lattice_point_list)
-    elif norm == 1:
-        eff_abs_lattice_point_list = [-coord+1 if coord > 0 else -coord-1 if coord < 0 else 0 for coord in lattice_point]
-        return sum(eff_abs_lattice_point_list)
-    else:
-        eff_lattice_point_list = [coord-1 if coord > 0 else coord+1 if coord < 0 else 0 for coord in lattice_point]
-        eff_coord_squares = [coord**norm for coord in eff_lattice_point_list]
-        return sum(eff_coord_squares)**(1/norm)
+def round_up(x : float) -> int:
+    return int(x) if float(int(x)) == x else int(x)+1
 
+# def eff_origin_distance(lattice_point: tuple[int,...], norm):
+#     # TODO: wie schlimm ist die Code-Dopplung?
+#     if norm == float("inf"):
+#         eff_abs_lattice_point_list = [coord-1 if coord > 0 else -coord-1 if coord < 0 else 0 for coord in lattice_point]
+#         return max(eff_abs_lattice_point_list)
+#     elif norm == 1:
+#         eff_abs_lattice_point_list = [-coord+1 if coord > 0 else -coord-1 if coord < 0 else 0 for coord in lattice_point]
+#         return sum(eff_abs_lattice_point_list)
+#     else:
+#         eff_lattice_point_list = [coord-1 if coord > 0 else coord+1 if coord < 0 else 0 for coord in lattice_point]
+#         eff_coord_squares = [coord**norm for coord in eff_lattice_point_list]
+#         return sum(eff_coord_squares)**(1/norm)
+    
 # dist(box1, box2) < tau <=> eff_origin_distance() der Differenz der assoziierten lattice points < tau_factor (= tau/delta) 
 
 def epsDensityTest(component: set[tuple[int,...]], step_count : int, density_dict, eps_bar) -> bool:
 
     #TODO Was ist schneller?
     return True in [density_dict[lattice_point] > step_count + eps_bar for lattice_point in component]
-
     # for lattice_point in component:
     #     if density_dict[lattice_point] > step_count: + eps_bar:
     #         return True
@@ -152,22 +154,29 @@ def epsDensityTest(component: set[tuple[int,...]], step_count : int, density_dic
 
 
 # Bestimmen der tau-Zusammenhangskomponenten von surviving_lattice_points durch Aufstellen eines Nähe-Graphen und Tiefensuche
-def connectedComponents(data_lattice_list, density_dict, tau_factor, step_count, norm, eps_bar) -> list[set[tuple[int,...]]]:
+def connectedComponents(data_lattice_list, density_dict, tau_eff:int, step_count, eps_bar) -> list[set[tuple[int,...]]]:
+
+    print(f"connectedComponents for step {step_count}")
     
     timer.start_variable("surviving_lattice_points")
     surviving_lattice_points = survivingLatticePoints(step_count, data_lattice_list, density_dict)
     timer.pause_variable("surviving_lattice_points")
     dim = len(next(iter(surviving_lattice_points)))
-    timer.start_variable("tau_distance_sets")
 
-    eff_tau_interval_list = list(range(-int(tau_factor)-1, int(tau_factor)+2))
-    tau_box = cartesian_potentiation(eff_tau_interval_list, dim)
+    print("finished surviving_lattice_points")
 
-    tau_distance_set = { lattice_point for lattice_point in tau_box if eff_origin_distance(lattice_point, norm) < tau_factor}
+    # timer.start_variable("tau_distance_sets")
+    # eff_tau_interval_list = list(range(-int(tau_factor)-1, int(tau_factor)+2))
+    # tau_box = cartesian_potentiation(eff_tau_interval_list, dim)
 
-    timer.pause_variable("tau_distance_sets")
+    # tau_distance_set = {lattice_point for lattice_point in tau_box if eff_origin_distance(lattice_point, norm) < tau_factor / 2}
+
+    # timer.pause_variable("tau_distance_sets")
+
+    # print("finished tau_distance_set")
+
     # lattice_large_box_dict = {point : tuple(map(lambda x: x // int(tau_factor), point)) for point in surviving_lattice_points}
-    large_boxes = {tuple(map(lambda x: x // int(tau_factor), point)) for point in surviving_lattice_points}
+    large_boxes = {tuple(map(lambda x: x // tau_eff, point)) for point in surviving_lattice_points}
     
     # langsam aber allgemeineres Konzept:
     # def singletonPreimageDict(d : dict) -> dict:
@@ -176,86 +185,41 @@ def connectedComponents(data_lattice_list, density_dict, tau_factor, step_count,
 
     # schneller:
     timer.start_variable("inverse_dicts")
-    large_box_lattice_dict = {box : set(cartesian_product([list(range(int(tau_factor)*comp,int(tau_factor)*(comp+1))) for comp in box])) & surviving_lattice_points 
+    large_box_lattice_dict = {box : set(cartesian_product([list(range(tau_eff*comp,tau_eff*(comp+1))) for comp in box])) & surviving_lattice_points 
                               for box in large_boxes}
     timer.pause_variable("inverse_dicts")
 
     tau_connection_graph = {}
     coord_shift = lambda coord : coord-1 if coord > 0 else -coord-1 if coord < 0 else 0
     sub = lambda x, y : x - y
-    # large_boxes = large_box_lattice_dict.keys()
     relative_neighbor_boxes = cartesian_potentiation(list(range(-1,1+1)), dim)
+
     timer.start_variable("box_loops")
-    # t1 = 0
-    # t2 = 0
-    # print(len(large_boxes))
     for box in large_boxes:
-        # t2_start = time.perf_counter()
         neighboring_boxes = {tuple(map(sum, zip(box, diff))) for diff in relative_neighbor_boxes} & large_boxes
-        # t2_stop = time.perf_counter()
-        # t2 += t2_stop- t2_start
-        # t1_start = time.perf_counter()
         neighboring_lattice_points = set.union(*[large_box_lattice_dict[neighboring_box] for neighboring_box in neighboring_boxes])
-        # t1_stop = time.perf_counter()
-        # t1 += t1_stop - t1_start
-        # print(len(neighboring_lattice_points))
         for new_point in large_box_lattice_dict[box]:
             connected_points = {point for point in neighboring_lattice_points - {new_point}
-            if tuple(map(sub, point, new_point)) in tau_distance_set}
+                                if max(map(coord_shift,map(sub, point, new_point))) < tau_eff}
             tau_connection_graph[new_point] = connected_points
     timer.pause_variable("box_loops")
-    # print(f"neigboring boxes: {t2:0.4f}")
-    # print(f"neighboring_lattice_points: {t1:0.4f}")
 
+    print("finished box loop")
 
-    # tau_connection_graph2 : dict[tuple[int,...],set[tuple[int,...]]] = {}
-
-    # distance_calculations = 0
-    # # distance_calc_time = 0
-    # # set_creation_time = 0
-    # # graph_add_time = 0
-
+    # timer.start_variable("alternative")
+    # tau_connection_graph2 = {}
     # coord_shift = lambda coord : coord-1 if coord > 0 else -coord-1 if coord < 0 else 0
     # sub = lambda x, y : x - y
-
-    # timer.start("alt")
     # for new_point in surviving_lattice_points:
-
-    #     # set_creation_time_start = time.perf_counter()
-
     #     old_points = list(tau_connection_graph2.keys())
     #     # rel_points = [tuple(map(lambda x, y : x - y, point, new_point)) for point in old_points]
-
-    #     # distance_calc_time_start = time.perf_counter()
-    #     connected_points = [point for point in old_points if max([coord_shift(coord) for coord in map(sub, point, new_point)]) < tau_factor]
-    #     # distance_calc_time_stop = time.perf_counter()
-    #     # distance_calc_time += distance_calc_time_stop - distance_calc_time_start
-
-
+    #     connected_points = [point for point in old_points if max([coord_shift(coord) for coord in map(sub, point, new_point)]) < tau_factor / 2]
     #     tau_connection_graph2[new_point] = set(connected_points)
-
-    #     # set_creation_time_stop = time.perf_counter()
-    #     # set_creation_time += set_creation_time_stop  - set_creation_time_start
-
-    #     distance_calculations += len(old_points)
-
-    #     # graph_add_time_start = time.perf_counter()
-
     #     for point in connected_points:
     #         tau_connection_graph2[point].add(new_point)
-
-    #     # graph_add_time_stop = time.perf_counter()
-    #     # graph_add_time += graph_add_time_stop - graph_add_time_start
-
-    # # timer.stop()
-    # # print(f"with {distance_calculations} distance calculations from {len(surviving_lattice_points)} lattice points")
-    # # print(f"set creation time: {set_creation_time:0.4f}")
-    # # print(f"Of That: distance calculation time:{distance_calc_time:0.4f}\n")
-    # # print(f"time to add edges to the graph: {graph_add_time:0.4f}\n")
-    # timer.stop()
+    # timer.pause_variable("alternative")
 
     timer.start_variable("dfs_algorithm")
-
     # Bestimmen der Komponenten des Graphen
     component_list : list[set[tuple[int,...]]] = [] 
     visited_vertices = set()
@@ -417,12 +381,14 @@ def main():
     connected_component_list = []
     step_count_limit = 10000
 
+    print("arrived at loop")
+
     while connected_component_count == 1:
         if step_count > step_count_limit:
             raise RuntimeError(f"Clustering nach {step_count_limit} Versuchen abgebrochen")
         timer.start_variable("connectedComponents")
         connected_component_list = connectedComponents(
-            data_lattice_list, density_dict, tau_factor, step_count, norm, eps_bar
+            data_lattice_list, density_dict, round_up(tau_factor/2), step_count, eps_bar
         )
         timer.pause_variable("connectedComponents")
         connected_component_count = len(connected_component_list) - 1
@@ -468,9 +434,10 @@ if __name__ == "__main__":
     main()
     timer.stop()
     timer.print_cumul_variable("surviving_lattice_points")
-    timer.print_cumul_variable("tau_distance_sets")
+    # timer.print_cumul_variable("tau_distance_sets")
     timer.print_cumul_variable("inverse_dicts")
     timer.print_cumul_variable("box_loops")
+    # timer.print_cumul_variable("alternative")
     timer.print_cumul_variable("dfs_algorithm")
     timer.print_cumul_variable("connectedComponents")
     timer.print_cumul_variable("plotting")
