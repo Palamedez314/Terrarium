@@ -156,26 +156,24 @@ def epsDensityTest(component: set[tuple[int,...]], step_count : int, density_dic
 # Bestimmen der tau-Zusammenhangskomponenten von surviving_lattice_points durch Aufstellen eines Nähe-Graphen und Tiefensuche
 def connectedComponents(data_lattice_list, density_dict, tau_eff:int, step_count, eps_bar) -> list[set[tuple[int,...]]]:
 
-    print(f"connectedComponents for step {step_count}")
+    # print(f"connectedComponents for step {step_count}")
     
     timer.start_variable("surviving_lattice_points")
     surviving_lattice_points = survivingLatticePoints(step_count, data_lattice_list, density_dict)
     timer.pause_variable("surviving_lattice_points")
     dim = len(next(iter(surviving_lattice_points)))
 
-    print("finished surviving_lattice_points")
+    # print("finished surviving_lattice_points")
 
+    # zu langsam für höhere Dimensionen (z.B. toy-10d)
     # timer.start_variable("tau_distance_sets")
     # eff_tau_interval_list = list(range(-int(tau_factor)-1, int(tau_factor)+2))
     # tau_box = cartesian_potentiation(eff_tau_interval_list, dim)
-
     # tau_distance_set = {lattice_point for lattice_point in tau_box if eff_origin_distance(lattice_point, norm) < tau_factor / 2}
-
     # timer.pause_variable("tau_distance_sets")
 
     # print("finished tau_distance_set")
 
-    # lattice_large_box_dict = {point : tuple(map(lambda x: x // int(tau_factor), point)) for point in surviving_lattice_points}
     large_boxes = {tuple(map(lambda x: x // tau_eff, point)) for point in surviving_lattice_points}
     
     # langsam aber allgemeineres Konzept:
