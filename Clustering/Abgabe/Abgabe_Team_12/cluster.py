@@ -70,30 +70,30 @@ def main():
 
     ############### Einlesen der Daten ###############
 
-    timer.start_variable("read in")
+    # timer.start_variable("read in")
 
     df = pd.read_csv(data_path)
     data_list = df.to_numpy().tolist()
     
-    timer.pause_variable("read in")
+    # timer.pause_variable("read in")
 
     ############### Datenverarbeitung (ohne Verwendung von externen Modulen) ###############
 
     dim = len(data_list[0])
     tau_eff = round_up(tau_factor/2)
 
-    timer.start_variable("density-dict")
+    # timer.start_variable("density-dict")
     # Lattice vorbereiten
     data_lattice_list = [tuple(int((c + 1) // (2 * delta)) for c in pt) for pt in data_list]
     density_dict = {}
     for pt in data_lattice_list:
         density_dict[pt] = density_dict.get(pt, 0) + 1
-    timer.pause_variable("density-dict")
+    # timer.pause_variable("density-dict")
 
     density_values = density_dict.values()
-    timer.start_variable("inverse-dict")
+    # timer.start_variable("inverse-dict")
     inverse_density_dict = {k : {point for point, density in density_dict.items() if density == k} for k in density_values}
-    timer.pause_variable("inverse-dict")
+    # timer.pause_variable("inverse-dict")
     
     h_max_bar = max(density_dict.values())
     eps_bar = eps_factor * (h_max_bar ** 0.5)
@@ -108,12 +108,12 @@ def main():
         if step_count > h_max_bar:
             raise RuntimeError(f"Clustering nach {h_max_bar} Versuchen abgebrochen weil finden von Clustern ab jetzt unmöglich ist")
         
-        timer.start_variable("connected components")
+        # timer.start_variable("connected components")
 
         if step_count in density_values:
             surviving_lattice_points -= inverse_density_dict[step_count]
 
-        timer.start_variable("box-loops")
+        # timer.start_variable("box-loops")
         tau_connection_graph = {}
         coord_shift = lambda coord : coord-1 if coord > 0 else -coord-1 if coord < 0 else 0
         sub = lambda x, y : x - y
@@ -125,9 +125,9 @@ def main():
             for point in connected_points:
                 tau_connection_graph[point].add(new_point)
             old_points.add(new_point)
-        timer.pause_variable("box-loops")
+        # timer.pause_variable("box-loops")
 
-        timer.start_variable("dfs algorithm")
+        # timer.start_variable("dfs algorithm")
         # Bestimmen der Komponenten des Graphen
         component_list : list[set[tuple[int,...]]] = [] 
         visited_vertices = set()
@@ -144,7 +144,7 @@ def main():
                         stack.extend(tau_connection_graph[queued_vertex])
                 visited_vertices.update(component)
                 component_list.append(component)
-        timer.pause_variable("dfs algorithm")
+        # timer.pause_variable("dfs algorithm")
 
         surviving_list : list[bool] = [epsDensityTest(component, step_count, density_dict, eps_bar) 
                                        for component in component_list]
@@ -160,7 +160,7 @@ def main():
         connected_component_count = len(connected_component_list) - 1
         step_count += 1
 
-    timer.start_variable("packing data")
+    # timer.start_variable("packing data")
 
     if connected_component_count == 0:
         clustered_data = [[1] + pt for pt in data_list]
@@ -175,7 +175,7 @@ def main():
                     break
             clustered_data.append([id] + pt)
 
-    timer.pause_variable("packing data")
+    # timer.pause_variable("packing data")
 
     ############### Schreiben der Daten in .csv/.log-Dateien ###############
 
@@ -184,28 +184,28 @@ def main():
 
     ############### Plotten der Daten ###############
 
-    timer.start_variable("plotting")
+    # timer.start_variable("plotting")
     # 2D Plots
     if dim == 2:
         plot_dataset([tuple(item) for item in data_list] , result_picture_data_path)
         plot_clusters(clustered_data, result_picture_clusters_path)
-    timer.pause_variable("plotting")
+    # timer.pause_variable("plotting")
 
 if __name__ == "__main__":
     timer = CustomTimer() 
-    timer.start()
+    # timer.start()
     main()
-    timer.stop()
+    # timer.stop()
 
     # Zum Optimieren, manche Zeiten doppeln sich (z.B. "box-loops" und "def algorithm" in connected components enthalten)
-    timer.print_cumul_variable("read in")
-    timer.print_cumul_variable("density-dict")
-    timer.print_cumul_variable("inverse-dict")
-    timer.print_cumul_variable("box-loops")
-    timer.print_cumul_variable("dfs algorithm")
-    timer.print_cumul_variable("connected components")
-    timer.print_cumul_variable("packing data")
-    timer.print_cumul_variable("plotting")
+    # timer.print_cumul_variable("read in")
+    # timer.print_cumul_variable("density-dict")
+    # timer.print_cumul_variable("inverse-dict")
+    # timer.print_cumul_variable("box-loops")
+    # timer.print_cumul_variable("dfs algorithm")
+    # timer.print_cumul_variable("connected components")
+    # timer.print_cumul_variable("packing data")
+    # timer.print_cumul_variable("plotting")
 
 
 # TODO:
