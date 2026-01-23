@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env python3
 
 import pandas as pd
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -40,6 +39,9 @@ def epsDensityTest(component: set[tuple[int,...]], step_count : int, density_dic
 def main():
 
     ############### Übergeben der Argumente aus Interface ###############
+    
+    timer = CustomTimer()
+    timer.start()
 
     args = parse_args()
 
@@ -53,8 +55,8 @@ def main():
         raise ValueError("norm must be >= 1")
 
     # Pfade
-    data_folder = Path("cluster-data")
-    result_folder = Path("cluster-results")
+    data_folder = Path("../cluster-data")
+    result_folder = Path("../cluster-results")
     result_folder.mkdir(exist_ok=True)
 
     data_path = data_folder / f"{datasetname}.csv"
@@ -79,8 +81,10 @@ def main():
 
     ############### Datenverarbeitung (ohne Verwendung von externen Modulen) ###############
 
+    n_data = len(data_list)
     dim = len(data_list[0])
     tau_eff = round_up(tau_factor/2)
+    rho_step = 1 / (n_data * (2 * delta) ** dim)
 
     # timer.start_variable("density-dict")
     # Lattice vorbereiten
@@ -103,6 +107,10 @@ def main():
     connected_component_count = 1
     connected_component_list = []
     surviving_lattice_points = set(data_lattice_list)
+
+    rho_list = [0.0]
+    cluster_sizes_1 = [n_data]
+    cluster_sizes_2 = [0]
 
     while connected_component_count == 1:
         if step_count > h_max_bar:
@@ -155,13 +163,16 @@ def main():
                                                             if not survived]) if False in surviving_list else set()
         # 0-te Komponente beinhaltet Kästchen, die zu keiner überlebenden Komponente gehören
         connected_component_list.insert(0,dead_components)
-        timer.pause_variable("connected components")
+        # timer.pause_variable("connected components")
 
         connected_component_count = len(connected_component_list) - 1
         step_count += 1
+        
+        rho_list.append(step_count * rho_step)
+        cluster_sizes_1.append(len(connected_component_list[1]) if connected_component_count > 0 else 0)
+        cluster_sizes_2.append(len(connected_component_list[2]) if connected_component_count > 1 else 0)
 
     # timer.start_variable("packing data")
-
     if connected_component_count == 0:
         clustered_data = [[1] + pt for pt in data_list]
     else:
@@ -174,13 +185,23 @@ def main():
                     id = j
                     break
             clustered_data.append([id] + pt)
-
     # timer.pause_variable("packing data")
+
+    log_data = list(map(list, zip(rho_list, cluster_sizes_1, cluster_sizes_2)))
+
+    timer.stop(print_single=False)
+
+    runtime = timer.get_cumul()
+    result_log_data = [runtime, cluster_sizes_1[-1], cluster_sizes_2[-1], rho_list[-1]]
 
     ############### Schreiben der Daten in .csv/.log-Dateien ###############
 
     result_data_frame = pd.DataFrame(clustered_data)
-    result_data_frame.to_csv(result_dataset_path, index=False)
+    result_data_frame.to_csv(result_dataset_path, index=False, header=False)
+    log_data_frame = pd.DataFrame(log_data)
+    log_data_frame.to_csv(log_path, index=False, header=False)
+    result_log_data_frame = pd.DataFrame(result_log_data)
+    result_log_data_frame.to_csv(result_log_path, index=False, header=False)
 
     ############### Plotten der Daten ###############
 
@@ -192,10 +213,7 @@ def main():
     # timer.pause_variable("plotting")
 
 if __name__ == "__main__":
-    timer = CustomTimer() 
-    # timer.start()
     main()
-    # timer.stop()
 
     # Zum Optimieren, manche Zeiten doppeln sich (z.B. "box-loops" und "def algorithm" in connected components enthalten)
     # timer.print_cumul_variable("read in")
@@ -217,5 +235,10 @@ if __name__ == "__main__":
 # "optionale weitere Aspekte"
 
 # Genaue Anforderungen auf seiner Seite erfüllen:
-# Berechtigung zum ausführen (u oder a)?
+# Berechtigung zum ausführen (u oder a)? -> takeown /F C:\SomePath /A /R /D Y?
 # aufpassen mit Windows/Linux (ein /r was Probleme macht?)
+
+# sed 's/\r$//' cluster.py > cluster1.py
+# chmod +rwx cluster1.py
+# <Umbenennen in cluster.py>
+# tar -czf team-12.tar.gz cluster.py customTimer.py plotting.py
