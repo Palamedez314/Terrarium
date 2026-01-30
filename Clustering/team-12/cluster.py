@@ -26,9 +26,25 @@ def parse_args():
 def round_up(x : float) -> int:
     return int(x) if float(int(x)) == x else int(x)+1
 
-def epsDensityTest(component: set[tuple[int,...]], step_count : int, density_dict, eps_bar) -> bool:
-    for lattice_point in component:
-        if density_dict[lattice_point] > step_count + eps_bar:
+def cartesian_product(X : list[list]):
+    dim = len(X)
+    prod = [()]
+    for l in range(dim):
+        prod = [ tup + (item,) for tup in prod for item in X[l] ]
+    return prod
+
+def cartesian_potentiation(lst : list, dim : int):
+    return cartesian_product([lst for _ in range(dim)])
+
+def neighborTest(b1, b2):
+    for coord1, coord2 in zip(b1, b2):
+        if abs(coord1 - coord2) > 1:
+            return False
+    return True
+
+def isBoundaryPoint(pt, mod, tau_eff):
+    for coord in pt:
+        if coord % mod < tau_eff or coord % mod >= mod - tau_eff:
             return True
     return False
 
@@ -39,10 +55,6 @@ def epsDensityTest(component: set[tuple[int,...]], step_count : int, density_dic
 def main():
 
     ############### Übergeben der Argumente aus Interface ###############
-    
-    timer = CustomTimer()
-    timer.start()
-
     args = parse_args()
 
     datasetname = args.datasetname
@@ -72,32 +84,37 @@ def main():
 
     ############### Einlesen der Daten ###############
 
-    # timer.start_variable("read in")
-
-    df = pd.read_csv(data_path)
+    df = pd.read_csv(data_path, header=None)
     data_list = df.to_numpy().tolist()
-    
-    # timer.pause_variable("read in")
 
     ############### Datenverarbeitung (ohne Verwendung von externen Modulen) ###############
+    timer = CustomTimer()
+    timer.start()
 
     n_data = len(data_list)
     dim = len(data_list[0])
     tau_eff = round_up(tau_factor/2)
     rho_step = 1 / (n_data * (2 * delta) ** dim)
 
-    # timer.start_variable("density-dict")
-    # Lattice vorbereiten
-    data_lattice_list = [tuple(int((c + 1) // (2 * delta)) for c in pt) for pt in data_list]
-    density_dict = {}
-    for pt in data_lattice_list:
-        density_dict[pt] = density_dict.get(pt, 0) + 1
-    # timer.pause_variable("density-dict")
+    timer.start_variable("density-dict")
 
-    density_values = density_dict.values()
-    # timer.start_variable("inverse-dict")
-    inverse_density_dict = {k : {point for point, density in density_dict.items() if density == k} for k in density_values}
-    # timer.pause_variable("inverse-dict")
+    # Lattice vorbereiten
+    timer.start_variable("data_lattice_list")
+    data_lattice_list = [tuple(int((c + 1) // (2 * delta)) for c in pt) for pt in data_list]
+    timer.pause_variable("data_lattice_list")
+    density_dict = {}
+    inverse_density_dict = {}
+    for pt in data_lattice_list:
+        old_density = density_dict.get(pt, 0)
+        density_dict[pt] = old_density + 1
+        if old_density > 0:
+            inverse_density_dict[old_density].remove(pt)
+        if old_density + 1 not in inverse_density_dict.keys():
+            inverse_density_dict[old_density + 1] = set()
+        inverse_density_dict[old_density + 1].add(pt)
+    timer.pause_variable("density-dict")
+
+    density_values = inverse_density_dict.keys()
     
     h_max_bar = max(density_dict.values())
     eps_bar = eps_factor * (h_max_bar ** 0.5)
@@ -121,21 +138,59 @@ def main():
         if step_count in density_values:
             surviving_lattice_points -= inverse_density_dict[step_count]
 
-        # timer.start_variable("box-loops")
-        tau_connection_graph = {}
-        coord_shift = lambda coord : coord-1 if coord > 0 else -coord-1 if coord < 0 else 0
-        sub = lambda x, y : x - y
-        old_points = set()
-        for new_point in surviving_lattice_points:
-            # rel_points = [tuple(map(lambda x, y : x - y, point, new_point)) for point in old_points]
-            connected_points = {point for point in old_points if max(map(coord_shift, map(sub, point, new_point))) < tau_eff}
-            tau_connection_graph[new_point] = connected_points
-            for point in connected_points:
-                tau_connection_graph[point].add(new_point)
-            old_points.add(new_point)
-        # timer.pause_variable("box-loops")
+        # if step_count == 0:
+        #     print(surviving_lattice_points)
 
-        # timer.start_variable("dfs algorithm")
+        def tauDistanceTest(pt1, pt2):
+            for coord1, coord2 in zip(pt1, pt2):
+                if abs(coord1 - coord2) > tau_eff:
+                    return False
+            return True
+
+        timer.start_variable("boxes_same_method")
+
+        box_size = 2
+        mod = box_size * tau_eff
+
+        lattice_large_boxe_dict = {point : tuple(map(lambda x: x // mod, point)) for point in surviving_lattice_points}
+        large_boxes = set(lattice_large_boxe_dict.values())
+        large_box_lattice_dict = {box : set(cartesian_product([list(range(mod*comp,mod*(comp+1))) for comp in box])) & surviving_lattice_points 
+                                        for box in large_boxes}
+
+        large_box_neighbor_graph = {}
+        old_boxes = set()
+        for new_box in large_boxes:
+            neighboring_boxes = {box for box in old_boxes if neighborTest(box, new_box)}
+            large_box_neighbor_graph[new_box] = neighboring_boxes
+            for box in neighboring_boxes:
+                large_box_neighbor_graph[box].add(new_box)
+            old_boxes.add(new_box)
+
+        tau_connection_graph = {}
+        old_points = set()
+        for box in large_boxes:
+            
+            box_lattice_points = large_box_lattice_dict[box]
+            neighboring_boxes_lattice_points = set.union(*[large_box_lattice_dict[neighboring_box]
+                                                           for neighboring_box 
+                                                           in large_box_neighbor_graph[box]]) if bool(large_box_neighbor_graph[box]) else set()
+            neighboring_boxes_lattice_points.update(box_lattice_points)
+            for new_point in large_box_lattice_dict[box]:
+                # lieber absolut (ohne sowas wie old_points) laufen und dann ohne den Schnitt?
+                if isBoundaryPoint(new_point, mod, tau_eff):
+                    relevant_points = neighboring_boxes_lattice_points & old_points
+                else:
+                    relevant_points = box_lattice_points & old_points
+                connected_points = {point for point in relevant_points if tauDistanceTest(point, new_point)}
+                tau_connection_graph[new_point] = connected_points
+                for point in connected_points:
+                    tau_connection_graph[point].add(new_point)
+                old_points.add(new_point)
+
+        timer.pause_variable("boxes_same_method")
+
+
+        timer.start_variable("dfs algorithm")
         # Bestimmen der Komponenten des Graphen
         component_list : list[set[tuple[int,...]]] = [] 
         visited_vertices = set()
@@ -152,10 +207,15 @@ def main():
                         stack.extend(tau_connection_graph[queued_vertex])
                 visited_vertices.update(component)
                 component_list.append(component)
-        # timer.pause_variable("dfs algorithm")
+        timer.pause_variable("dfs algorithm")
 
-        surviving_list : list[bool] = [epsDensityTest(component, step_count, density_dict, eps_bar) 
-                                       for component in component_list]
+        def epsDensityTest(component: set[tuple[int,...]]) -> bool:
+            for lattice_point in component:
+                if density_dict[lattice_point] > step_count + eps_bar:
+                    return True
+            return False
+
+        surviving_list : list[bool] = [epsDensityTest(component) for component in component_list]
         
         connected_component_list = [component for component, survived in zip(component_list,surviving_list) if survived]
         dead_components : set[tuple[int,...]] = set.union(*[component for component, survived 
@@ -172,20 +232,21 @@ def main():
         cluster_sizes_1.append(len(connected_component_list[1]) if connected_component_count > 0 else 0)
         cluster_sizes_2.append(len(connected_component_list[2]) if connected_component_count > 1 else 0)
 
-    # timer.start_variable("packing data")
+    timer.start_variable("packing data")
+    # geht das effizienter?
     if connected_component_count == 0:
         clustered_data = [[1] + pt for pt in data_list]
     else:
         clustered_data = []
         for i, pt in enumerate(data_list):
             lattice_pt = data_lattice_list[i]
-            id = 0  # Standard Cluster 0
+            id = 0
             for j, component in enumerate(connected_component_list):
                 if lattice_pt in component:
                     id = j
                     break
             clustered_data.append([id] + pt)
-    # timer.pause_variable("packing data")
+    timer.pause_variable("packing data")
 
     log_data = list(map(list, zip(rho_list, cluster_sizes_1, cluster_sizes_2)))
 
@@ -205,40 +266,41 @@ def main():
 
     ############### Plotten der Daten ###############
 
-    # timer.start_variable("plotting")
-    # 2D Plots
+    timer.start_variable("plotting")
+    # # 2D Plots
     if dim == 2:
         plot_dataset([tuple(item) for item in data_list] , result_picture_data_path)
         plot_clusters(clustered_data, result_picture_clusters_path)
-    # timer.pause_variable("plotting")
+    timer.pause_variable("plotting")
+
+    
+    # Zum Optimieren, manche Zeiten doppeln sich (z.B. "box-loops" und "def algorithm" in connected components enthalten)
+    timer.print_cumul()
+    timer.print_cumul_variable("data_lattice_list")
+    timer.print_cumul_variable("density-dict")
+    # timer.print_cumul_variable("inverse-dict")
+    # timer.print_cumul_variable("box-loops")
+    timer.print_cumul_variable("boxes_same_method")
+    timer.print_cumul_variable("dfs algorithm")
+    # timer.print_cumul_variable("connected components")
+    timer.print_cumul_variable("packing data")
+    timer.print_cumul_variable("plotting")
+
 
 if __name__ == "__main__":
     main()
 
-    # Zum Optimieren, manche Zeiten doppeln sich (z.B. "box-loops" und "def algorithm" in connected components enthalten)
-    # timer.print_cumul_variable("read in")
-    # timer.print_cumul_variable("density-dict")
-    # timer.print_cumul_variable("inverse-dict")
-    # timer.print_cumul_variable("box-loops")
-    # timer.print_cumul_variable("dfs algorithm")
-    # timer.print_cumul_variable("connected components")
-    # timer.print_cumul_variable("packing data")
-    # timer.print_cumul_variable("plotting")
-
-
 # TODO:
-
-# log-Datei Dinge implementieren
 
 # Performance verbessern (besserer Alghorithmus für "box-loop"?)
 
-# "optionale weitere Aspekte"
-
-# Genaue Anforderungen auf seiner Seite erfüllen:
-# Berechtigung zum ausführen (u oder a)? -> takeown /F C:\SomePath /A /R /D Y?
-# aufpassen mit Windows/Linux (ein /r was Probleme macht?)
-
+# alt:
 # sed 's/\r$//' cluster.py > cluster1.py
 # chmod +rwx cluster1.py
 # <Umbenennen in cluster.py>
+# tar -czf team-12.tar.gz cluster.py customTimer.py plotting.py
+
+# neu:
+# Einstellung LF
+# chmod +rwx cluster.py
 # tar -czf team-12.tar.gz cluster.py customTimer.py plotting.py

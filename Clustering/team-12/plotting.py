@@ -9,13 +9,13 @@ def plot_dataset(data: list[tuple[float,...]], path):
     ys = [p[1] for p in data]
 
     plt.figure(figsize=(6, 6))
-    plt.scatter(xs, ys, s=40, color="blue")
+    plt.scatter(xs, ys, s=5)
     plt.gca().set_aspect("equal", adjustable="box")
     
     plt.xlim(min(xs)-0.05, max(xs)+0.05)
     plt.ylim(min(ys)-0.05, max(ys)+0.05)
 
-    plt.savefig(path)
+    plt.savefig(path, dpi=400)
     plt.close()
 
 def plot_clusters(clustered_data: list[list], path):
@@ -43,5 +43,5 @@ def plot_clusters(clustered_data: list[list], path):
         else:
             plt.scatter(xs_c, ys_c, s=5)
 
-    plt.savefig(path, dpi=800)
+    plt.savefig(path, dpi=400)
     plt.close()
