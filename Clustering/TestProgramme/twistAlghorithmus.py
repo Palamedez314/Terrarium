@@ -40,6 +40,9 @@ class Cluster:
     def get_max_density(self) -> int:
         return self._max_density
 
+    def is_hidden(self) -> bool:
+        return self._hidden
+
     def add_point(self, pt : point) -> None:
         self._points.add(pt)
 
@@ -103,3 +106,18 @@ for rho_bar in range(max_density, 0, -1):
         # 
 
         used_points.add(new_point)
+
+
+
+
+
+class Pointer:
+    def __init__(self, target):
+        self.__target = target
+
+    @property
+    def target(self):
+        return self.__target
+
+    def change_target(self, target):
+        self.__target = target
