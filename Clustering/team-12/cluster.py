@@ -130,6 +130,8 @@ def main():
     
     timer.start_variable("cluster-loop")
 
+    tau_connection_graph = {}
+
     clusters : set[Cluster] = set()
     iterated_points = set()
     point_cluster_dict : dict[point, Cluster] = {}
@@ -148,29 +150,81 @@ def main():
         if not bool(new_layer):
             continue
 
+        print(rho_bar)
+        print(len(new_layer))
+
+        old_points = iterated_points.copy()
+
         for new_point in new_layer:
             connected_points = {pt for pt in iterated_points if tauDistanceTest(pt, new_point)}
-            connected_clusters = {point_cluster_dict[pt] for pt in connected_points}
+            tau_connection_graph[new_point] = connected_points
+            for pt in connected_points:
+                tau_connection_graph[pt].add(new_point)
+            iterated_points.add(new_point)
 
-            if len(connected_clusters) == 0:
-                new_cluster = Cluster({new_point}, {density_dict[new_point]})
-                point_cluster_dict[new_point] = new_cluster
-                clusters.add(new_cluster)
+        # werden nur Punkte aus dem layer hier rein getan?
+        visited_layer_points = set()
+        for new_point in new_layer:
+            
+            if new_point in visited_layer_points:
+                continue
 
-            else:
+            new_cluster_points = set()
+            connected_clusters : set[Cluster] = set()
+            stack = []
+            stack.append(new_point)
+            while bool(stack):
+                queued_point = stack.pop()
+                new_cluster_points.add(queued_point)
+                neighbor_points = tau_connection_graph[queued_point]
+                neighbor_cluster_points = neighbor_points & old_points
+                connected_clusters.update({point_cluster_dict[pt] for pt in neighbor_cluster_points})
+                layer_neighbor_points = neighbor_points - neighbor_cluster_points
+                stack.extend(layer_neighbor_points - new_cluster_points)
+
+            visited_layer_points.update(new_cluster_points)
+            if bool(connected_clusters):
+
                 first_cluster = connected_clusters.pop()
 
-                if len(connected_clusters) > 0:
+                if bool(connected_clusters):
                     first_cluster.merge(*connected_clusters)
                     clusters -= connected_clusters
                     connected_cluster_points = set.union(*[ct.points for ct in connected_clusters])
-                    for pt in connected_cluster_points:
-                        point_cluster_dict[pt] = first_cluster
+                    point_cluster_dict.update(dict.fromkeys(connected_cluster_points, first_cluster))
+                
+                first_cluster.update_points(new_cluster_points, {density_dict[pt] for pt in new_cluster_points})
+                point_cluster_dict.update(dict.fromkeys(new_cluster_points, first_cluster))
 
-                first_cluster.add_point(new_point, density_dict[new_point])
-                point_cluster_dict[new_point] = first_cluster
+            else:
+                new_cluster = Cluster(new_cluster_points, {density_dict[pt] for pt in new_cluster_points})
+                clusters.add(new_cluster)
+                point_cluster_dict.update(dict.fromkeys(new_cluster_points, new_cluster))
 
-            iterated_points.add(new_point)
+
+        # for new_point in new_layer:
+        #     connected_points = {pt for pt in iterated_points if tauDistanceTest(pt, new_point)}
+        #     connected_clusters = {point_cluster_dict[pt] for pt in connected_points}
+
+        #     if len(connected_clusters) == 0:
+        #         new_cluster = Cluster({new_point}, {density_dict[new_point]})
+        #         point_cluster_dict[new_point] = new_cluster
+        #         clusters.add(new_cluster)
+
+        #     else:
+        #         first_cluster = connected_clusters.pop()
+
+        #         if len(connected_clusters) > 0:
+        #             first_cluster.merge(*connected_clusters)
+        #             clusters -= connected_clusters
+        #             connected_cluster_points = set.union(*[ct.points for ct in connected_clusters])
+        #             for pt in connected_cluster_points:
+        #                 point_cluster_dict[pt] = first_cluster
+
+        #         first_cluster.add_point(new_point, density_dict[new_point])
+        #         point_cluster_dict[new_point] = first_cluster
+
+        #     iterated_points.add(new_point)
 
 
         for cluster in clusters:

@@ -13,6 +13,10 @@ class Cluster:
         self.points.add(pt)
         self.max_density = max(self.max_density, density)
 
+    def update_points(self, pts : set[point], densities : set[int]) -> None:
+        self.points.update(pts)
+        self.max_density = max(*densities, self.max_density)
+
     def merge(self, *merge_clusters : 'Cluster') -> None:
         self.points.update(*[cluster.points for cluster in merge_clusters])
         self.max_density = max(*[cluster.max_density for cluster in merge_clusters], self.max_density)
