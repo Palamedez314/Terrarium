@@ -5,6 +5,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path
 from customTimer import CustomTimer
 from plotting import plot_dataset, plot_clusters
+from classter import Cluster, Pointer, point
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("datasetname", help="Name of the dataset out of the folder 'cluster-data' (without .csv extension)")
@@ -115,145 +116,116 @@ def main():
     timer.pause_variable("density-dict")
 
     density_values = inverse_density_dict.keys()
+    max_density = max(density_values)
+    eps_bar = eps_factor * (max_density ** 0.5)
+
+    def tauDistanceTest(pt1, pt2) -> bool:
+        for coord1, coord2 in zip(pt1, pt2):
+            if abs(coord1 - coord2) > tau_eff:
+                return False
+        return True
+
+    def epsDensityTest(pts: set[point]) -> bool:
+        for pt in pts:
+            if density_dict[pt] > rho_bar + eps_bar:
+                return True
+        return False
     
-    h_max_bar = max(density_dict.values())
-    eps_bar = eps_factor * (h_max_bar ** 0.5)
+    timer.start_variable("cluster-loop")
 
-    # Clustering-Schleife
-    step_count = 0
-    connected_component_count = 1
-    connected_component_list = []
-    surviving_lattice_points = set(data_lattice_list)
+    clusters : set[Cluster] = set()
+    iterated_points = set()
+    point_cluster_pointer_dict : dict[point, Pointer] = {}
 
-    rho_list = [0.0]
-    cluster_sizes_1 = [n_data]
-    cluster_sizes_2 = [0]
+    result_cluster_sets : list[set[point]] = []
+    result_cluster_count : int = 1
+    result_rho_bar = 0
 
-    while connected_component_count == 1:
-        if step_count > h_max_bar:
-            raise RuntimeError(f"Clustering nach {h_max_bar} Versuchen abgebrochen weil finden von Clustern ab jetzt unmöglich ist")
+    first_cluster_sizes_rev = []
+    second_cluster_sizes_rev = []
+
+    for rho_bar in range(max_density, 0, -1):
         
-        # timer.start_variable("connected components")
+        new_layer = inverse_density_dict[rho_bar]
 
-        if step_count in density_values:
-            surviving_lattice_points -= inverse_density_dict[step_count]
+        for new_point in new_layer:
+            connected_points = {pt for pt in iterated_points if tauDistanceTest(pt, new_point)}
+            connected_cluster_pointers = {point_cluster_pointer_dict[pt] for pt in connected_points}
 
-        # if step_count == 0:
-        #     print(surviving_lattice_points)
+            if len(connected_cluster_pointers) == 0:
+                new_cluster = Cluster({new_point}, {density_dict[new_point]})
+                point_cluster_pointer_dict[new_point] = Pointer(new_cluster)
+                clusters.add(new_cluster)
 
-        def tauDistanceTest(pt1, pt2):
-            for coord1, coord2 in zip(pt1, pt2):
-                if abs(coord1 - coord2) > tau_eff:
-                    return False
-            return True
+            else:
+                connected_clusters = {pointer.target for pointer in connected_cluster_pointers}
+                first_pointer = connected_cluster_pointers.pop()
+                first_cluster = first_pointer.target
+                connected_clusters.remove(first_cluster)
 
-        timer.start_variable("boxes_same_method")
+                if len(connected_clusters) > 0:
+                    first_cluster.merge(*connected_clusters)
+                    for pointer in connected_cluster_pointers:
+                        if pointer.target != first_cluster:
+                            del pointer.target
+                        pointer.change_target(first_cluster)
 
-        box_size = 2
-        mod = box_size * tau_eff
+                first_cluster.add_point(new_point, density_dict[new_point])
+                point_cluster_pointer_dict[new_point] = first_pointer
 
-        lattice_large_boxe_dict = {point : tuple(map(lambda x: x // mod, point)) for point in surviving_lattice_points}
-        large_boxes = set(lattice_large_boxe_dict.values())
-        large_box_lattice_dict = {box : set(cartesian_product([list(range(mod*comp,mod*(comp+1))) for comp in box])) & surviving_lattice_points 
-                                        for box in large_boxes}
+            iterated_points.add(new_point)
 
-        large_box_neighbor_graph = {}
-        old_boxes = set()
-        for new_box in large_boxes:
-            neighboring_boxes = {box for box in old_boxes if neighborTest(box, new_box)}
-            large_box_neighbor_graph[new_box] = neighboring_boxes
-            for box in neighboring_boxes:
-                large_box_neighbor_graph[box].add(new_box)
-            old_boxes.add(new_box)
+        for cluster in clusters:
+            cluster.update_visibility(epsDensityTest(cluster.points))
 
-        tau_connection_graph = {}
-        old_points = set()
-        for box in large_boxes:
-            
-            box_lattice_points = large_box_lattice_dict[box]
-            neighboring_boxes_lattice_points = set.union(*[large_box_lattice_dict[neighboring_box]
-                                                           for neighboring_box 
-                                                           in large_box_neighbor_graph[box]]) if bool(large_box_neighbor_graph[box]) else set()
-            neighboring_boxes_lattice_points.update(box_lattice_points)
-            for new_point in large_box_lattice_dict[box]:
-                # lieber absolut (ohne sowas wie old_points) laufen und dann ohne den Schnitt?
-                if isBoundaryPoint(new_point, mod, tau_eff):
-                    relevant_points = neighboring_boxes_lattice_points & old_points
-                else:
-                    relevant_points = box_lattice_points & old_points
-                connected_points = {point for point in relevant_points if tauDistanceTest(point, new_point)}
-                tau_connection_graph[new_point] = connected_points
-                for point in connected_points:
-                    tau_connection_graph[point].add(new_point)
-                old_points.add(new_point)
+        visible_clusters = {ct for ct in clusters if ct.visible}
 
-        timer.pause_variable("boxes_same_method")
+        visible_cluster_count = len(visible_clusters)
 
+        if visible_cluster_count != 1:
+            result_cluster_sets = [ct.points.copy() for ct in clusters]
+            hidden_clusters = clusters - visible_clusters
+            hidden_cluster_points = set.union(*[ct.points for ct in hidden_clusters]) if bool(hidden_clusters) else set()
+            result_cluster_sets.insert(0, hidden_cluster_points)
+            result_cluster_count = visible_cluster_count
+            result_rho_bar = rho_bar
 
-        timer.start_variable("dfs algorithm")
-        # Bestimmen der Komponenten des Graphen
-        component_list : list[set[tuple[int,...]]] = [] 
-        visited_vertices = set()
-        for vertex in surviving_lattice_points:
-            # Depth-first-search im Graphen tau_connection_graph ausgehend vom Knoten vertex (siehe Wikipedia-Pseudocode)
-            if vertex not in visited_vertices:
-                component = set()
-                stack = []
-                stack.append(vertex)
-                while bool(stack):
-                    queued_vertex = stack.pop()
-                    if queued_vertex not in component:
-                        component.add(queued_vertex)
-                        stack.extend(tau_connection_graph[queued_vertex])
-                visited_vertices.update(component)
-                component_list.append(component)
-        timer.pause_variable("dfs algorithm")
+        first_cluster_sizes_rev.append(len(result_cluster_sets[1]) if result_cluster_count > 0 else 0)
+        second_cluster_sizes_rev.append(len(result_cluster_sets[2]) if result_cluster_count > 1 else 0)
 
-        def epsDensityTest(component: set[tuple[int,...]]) -> bool:
-            for lattice_point in component:
-                if density_dict[lattice_point] > step_count + eps_bar:
-                    return True
-            return False
+    assert(result_cluster_count != 1)
 
-        surviving_list : list[bool] = [epsDensityTest(component) for component in component_list]
-        
-        connected_component_list = [component for component, survived in zip(component_list,surviving_list) if survived]
-        dead_components : set[tuple[int,...]] = set.union(*[component for component, survived 
-                                                            in zip(component_list,surviving_list) 
-                                                            if not survived]) if False in surviving_list else set()
-        # 0-te Komponente beinhaltet Kästchen, die zu keiner überlebenden Komponente gehören
-        connected_component_list.insert(0,dead_components)
-        # timer.pause_variable("connected components")
+    timer.pause_variable("cluster-loop")
 
-        connected_component_count = len(connected_component_list) - 1
-        step_count += 1
-        
-        rho_list.append(step_count * rho_step)
-        cluster_sizes_1.append(len(connected_component_list[1]) if connected_component_count > 0 else 0)
-        cluster_sizes_2.append(len(connected_component_list[2]) if connected_component_count > 1 else 0)
+    first_cluster_sizes_rev.append(n_data)
+    second_cluster_sizes_rev.append(0)
+
+    first_cluster_sizes = list(reversed(first_cluster_sizes_rev))[:result_rho_bar + 1]
+    second_cluster_sizes = list(reversed(second_cluster_sizes_rev))[:result_rho_bar + 1]
+    rho_list = [i * rho_step for i in range(result_rho_bar + 1)]
 
     timer.start_variable("packing data")
     # geht das effizienter?
-    if connected_component_count == 0:
+    if result_cluster_count == 0:
         clustered_data = [[1] + pt for pt in data_list]
     else:
         clustered_data = []
         for i, pt in enumerate(data_list):
             lattice_pt = data_lattice_list[i]
             id = 0
-            for j, component in enumerate(connected_component_list):
-                if lattice_pt in component:
+            for j, cluster_set in enumerate(result_cluster_sets):
+                if lattice_pt in cluster_set:
                     id = j
                     break
             clustered_data.append([id] + pt)
     timer.pause_variable("packing data")
 
-    log_data = list(map(list, zip(rho_list, cluster_sizes_1, cluster_sizes_2)))
+    log_data = list(map(list, zip(rho_list, first_cluster_sizes, second_cluster_sizes)))
 
     timer.stop(print_single=False)
 
     runtime = timer.get_cumul()
-    result_log_data = [runtime, cluster_sizes_1[-1], cluster_sizes_2[-1], rho_list[-1]]
+    result_log_data = [runtime, first_cluster_sizes[-1], second_cluster_sizes[-1], rho_list[-1]]
 
     ############### Schreiben der Daten in .csv/.log-Dateien ###############
 
@@ -273,16 +245,12 @@ def main():
         plot_clusters(clustered_data, result_picture_clusters_path)
     timer.pause_variable("plotting")
 
-    
     # Zum Optimieren, manche Zeiten doppeln sich (z.B. "box-loops" und "def algorithm" in connected components enthalten)
     timer.print_cumul()
     timer.print_cumul_variable("data_lattice_list")
     timer.print_cumul_variable("density-dict")
     # timer.print_cumul_variable("inverse-dict")
-    # timer.print_cumul_variable("box-loops")
-    timer.print_cumul_variable("boxes_same_method")
-    timer.print_cumul_variable("dfs algorithm")
-    # timer.print_cumul_variable("connected components")
+    timer.print_cumul_variable("cluster-loop")
     timer.print_cumul_variable("packing data")
     timer.print_cumul_variable("plotting")
 
