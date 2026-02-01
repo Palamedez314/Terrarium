@@ -5,7 +5,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path
 from customTimer import CustomTimer
 from plotting import plot_dataset, plot_clusters
-from classter import Cluster, ClusterPointer, point
+from classter import Cluster, point
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("datasetname", help="Name of the dataset out of the folder 'cluster-data' (without .csv extension)")
@@ -138,7 +138,7 @@ def main():
 
     clusters : set[Cluster] = set()
     iterated_points = set()
-    point_cluster_pointer_dict : dict[point, ClusterPointer] = {}
+    point_cluster_dict : dict[point, Cluster] = {}
 
     result_cluster_sets : list[set[point]] = []
     result_cluster_count : int = 1
@@ -158,28 +158,26 @@ def main():
 
         for new_point in new_layer:
             connected_points = {pt for pt in iterated_points if tauDistanceTest(pt, new_point)}
-            connected_cluster_pointers = {point_cluster_pointer_dict[pt] for pt in connected_points}
+            connected_clusters = {point_cluster_dict[pt] for pt in connected_points}
 
-            if len(connected_cluster_pointers) == 0:
+            if len(connected_clusters) == 0:
                 new_cluster = Cluster({new_point}, {density_dict[new_point]})
-                point_cluster_pointer_dict[new_point] = ClusterPointer(new_cluster)
+                point_cluster_dict[new_point] = new_cluster
                 clusters.add(new_cluster)
+                changed_clusters.add(new_cluster)
 
             else:
-                connected_clusters = {pointer.target for pointer in connected_cluster_pointers}
-                first_pointer = connected_cluster_pointers.pop()
-                first_cluster = first_pointer.target
-                other_clusters = connected_clusters - {first_cluster}
+                first_cluster = connected_clusters.pop()
 
-                if len(other_clusters) > 0:
-                    first_cluster.merge(*other_clusters)
-                    clusters -= other_clusters
-                    relevant_pointers = set.union(*[ct.referencing_pointers for ct in other_clusters])
-                    for pointer in relevant_pointers:
-                        pointer.change_target(first_cluster)
+                if len(connected_clusters) > 0:
+                    first_cluster.merge(*connected_clusters)
+                    clusters -= connected_clusters
+                    connected_cluster_points = set.union(*[ct.points for ct in connected_clusters])
+                    for pt in connected_cluster_points:
+                        point_cluster_dict[pt] = first_cluster
 
                 first_cluster.add_point(new_point, density_dict[new_point])
-                point_cluster_pointer_dict[new_point] = first_pointer
+                point_cluster_dict[new_point] = first_cluster
 
                 changed_clusters.add(first_cluster)
 
