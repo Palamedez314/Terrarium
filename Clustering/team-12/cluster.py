@@ -5,7 +5,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path
 from customTimer import CustomTimer
 from plotting import plot_dataset, plot_clusters
-from classter import Cluster, Pointer, point
+from classter import Cluster, ClusterPointer, point
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("datasetname", help="Name of the dataset out of the folder 'cluster-data' (without .csv extension)")
@@ -119,6 +119,9 @@ def main():
     max_density = max(density_values)
     eps_bar = eps_factor * (max_density ** 0.5)
 
+    print(max_density)
+    print(inverse_density_dict[max_density])
+
     def tauDistanceTest(pt1, pt2) -> bool:
         for coord1, coord2 in zip(pt1, pt2):
             if abs(coord1 - coord2) > tau_eff:
@@ -135,7 +138,7 @@ def main():
 
     clusters : set[Cluster] = set()
     iterated_points = set()
-    point_cluster_pointer_dict : dict[point, Pointer] = {}
+    point_cluster_pointer_dict : dict[point, ClusterPointer] = {}
 
     result_cluster_sets : list[set[point]] = []
     result_cluster_count : int = 1
@@ -148,50 +151,82 @@ def main():
         
         new_layer = inverse_density_dict[rho_bar]
 
+        if not bool(new_layer):
+            continue
+
+        changed_clusters = set()
+
         for new_point in new_layer:
             connected_points = {pt for pt in iterated_points if tauDistanceTest(pt, new_point)}
             connected_cluster_pointers = {point_cluster_pointer_dict[pt] for pt in connected_points}
 
             if len(connected_cluster_pointers) == 0:
                 new_cluster = Cluster({new_point}, {density_dict[new_point]})
-                point_cluster_pointer_dict[new_point] = Pointer(new_cluster)
+                point_cluster_pointer_dict[new_point] = ClusterPointer(new_cluster)
                 clusters.add(new_cluster)
 
             else:
                 connected_clusters = {pointer.target for pointer in connected_cluster_pointers}
                 first_pointer = connected_cluster_pointers.pop()
                 first_cluster = first_pointer.target
-                connected_clusters.remove(first_cluster)
+                other_clusters = connected_clusters - {first_cluster}
 
-                if len(connected_clusters) > 0:
-                    first_cluster.merge(*connected_clusters)
-                    for pointer in connected_cluster_pointers:
-                        if pointer.target != first_cluster:
-                            del pointer.target
+                if len(other_clusters) > 0:
+                    first_cluster.merge(*other_clusters)
+                    clusters -= other_clusters
+                    relevant_pointers = set.union(*[ct.referencing_pointers for ct in other_clusters])
+                    for pointer in relevant_pointers:
                         pointer.change_target(first_cluster)
 
                 first_cluster.add_point(new_point, density_dict[new_point])
                 point_cluster_pointer_dict[new_point] = first_pointer
 
+                changed_clusters.add(first_cluster)
+
             iterated_points.add(new_point)
 
-        for cluster in clusters:
+
+        for cluster in changed_clusters:
             cluster.update_visibility(epsDensityTest(cluster.points))
 
-        visible_clusters = {ct for ct in clusters if ct.visible}
+        # visible_clusters = {ct for ct in clusters if ct.visible}
+        visible_clusters = clusters
 
         visible_cluster_count = len(visible_clusters)
 
         if visible_cluster_count != 1:
-            result_cluster_sets = [ct.points.copy() for ct in clusters]
+            result_cluster_sets = [ct.points.copy() for ct in visible_clusters]
             hidden_clusters = clusters - visible_clusters
             hidden_cluster_points = set.union(*[ct.points for ct in hidden_clusters]) if bool(hidden_clusters) else set()
             result_cluster_sets.insert(0, hidden_cluster_points)
             result_cluster_count = visible_cluster_count
             result_rho_bar = rho_bar
+            # print(f"changed with rho_bar = {rho_bar}")
+            # print(f"visible_count = {visible_cluster_count}")
 
-        first_cluster_sizes_rev.append(len(result_cluster_sets[1]) if result_cluster_count > 0 else 0)
-        second_cluster_sizes_rev.append(len(result_cluster_sets[2]) if result_cluster_count > 1 else 0)
+            if result_cluster_count == 0:
+                clustered_data = [[1] + pt for pt in data_list]
+            else:
+                clustered_data = []
+                for i, pt in enumerate(data_list):
+                    lattice_pt = data_lattice_list[i]
+                    id = 0
+                    for j, cluster_set in enumerate(result_cluster_sets):
+                        if lattice_pt in cluster_set:
+                            id = j
+                            break
+                    clustered_data.append([id] + pt)
+
+            # plot_clusters(clustered_data, result_picture_clusters_path)
+            # from time import sleep
+            # sleep(0.1)
+
+        visible_clusters_list = list(visible_clusters)
+        first_cluster_sizes_rev.append(len(visible_clusters_list[0].points) if visible_cluster_count > 0 else 0)
+        second_cluster_sizes_rev.append(len(visible_clusters_list[1].points) if visible_cluster_count > 1 else 0)
+        # print(rho_bar)
+        # print(new_layer)
+        # print(result_cluster_sets)
 
     assert(result_cluster_count != 1)
 

@@ -5,6 +5,7 @@ class Cluster:
         self.points : set[point] = points
         self.max_density : int = max(*list(densities)) if len(densities) > 1 else next(iter(densities))
         self.visible : bool = visible
+        self.referencing_pointers : set[ClusterPointer] = set()
 
     def __str__(self) -> str:
         return f"Cluster with \npoints: {self.points},\nmax_density: {self.max_density},\nhidden: {self.visible}"
@@ -20,9 +21,18 @@ class Cluster:
     def update_visibility(self, visible) -> None:
         self.visible = visible
 
-class Pointer:
-    def __init__(self, target):
-        self.target = target
+    def add_referencing_pointer(self, pointer) -> None:
+        self.referencing_pointers.add(pointer)
 
-    def change_target(self, target):
-        self.target = target
+class ClusterPointer:
+    def __init__(self, target : Cluster):
+        self._target = target
+        target.add_referencing_pointer(self)
+
+    @property
+    def target(self):
+        return self._target
+
+    def change_target(self, target : Cluster):
+        self._target = target
+        target.add_referencing_pointer(self)
