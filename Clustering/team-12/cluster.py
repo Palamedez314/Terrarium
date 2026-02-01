@@ -119,20 +119,20 @@ def main():
     max_density = max(density_values)
     eps_bar = eps_factor * (max_density ** 0.5)
 
-    print(max_density)
-    print(inverse_density_dict[max_density])
-
     def tauDistanceTest(pt1, pt2) -> bool:
         for coord1, coord2 in zip(pt1, pt2):
             if abs(coord1 - coord2) > tau_eff:
                 return False
         return True
 
-    def epsDensityTest(pts: set[point]) -> bool:
-        for pt in pts:
-            if density_dict[pt] > rho_bar + eps_bar:
-                return True
-        return False
+    # def epsDensityTest(pts: set[point]) -> bool:
+    #     for pt in pts:
+    #         if density_dict[pt] > rho_bar + eps_bar:
+    #             return True
+    #     return False
+
+    def epsDensityTest(ct: Cluster) -> bool:
+        return ct.max_density > rho_bar + eps_bar
     
     timer.start_variable("cluster-loop")
 
@@ -153,8 +153,6 @@ def main():
 
         if not bool(new_layer):
             continue
-
-        changed_clusters = set()
 
         for new_point in new_layer:
             connected_points = {pt for pt in iterated_points if tauDistanceTest(pt, new_point)}
@@ -181,16 +179,12 @@ def main():
                 first_cluster.add_point(new_point, density_dict[new_point])
                 point_cluster_pointer_dict[new_point] = first_pointer
 
-                changed_clusters.add(first_cluster)
-
             iterated_points.add(new_point)
 
+        for cluster in clusters:
+            cluster.update_visibility(epsDensityTest(cluster))
 
-        for cluster in changed_clusters:
-            cluster.update_visibility(epsDensityTest(cluster.points))
-
-        # visible_clusters = {ct for ct in clusters if ct.visible}
-        visible_clusters = clusters
+        visible_clusters = {ct for ct in clusters if ct.visible}
 
         visible_cluster_count = len(visible_clusters)
 
@@ -201,32 +195,10 @@ def main():
             result_cluster_sets.insert(0, hidden_cluster_points)
             result_cluster_count = visible_cluster_count
             result_rho_bar = rho_bar
-            # print(f"changed with rho_bar = {rho_bar}")
-            # print(f"visible_count = {visible_cluster_count}")
-
-            if result_cluster_count == 0:
-                clustered_data = [[1] + pt for pt in data_list]
-            else:
-                clustered_data = []
-                for i, pt in enumerate(data_list):
-                    lattice_pt = data_lattice_list[i]
-                    id = 0
-                    for j, cluster_set in enumerate(result_cluster_sets):
-                        if lattice_pt in cluster_set:
-                            id = j
-                            break
-                    clustered_data.append([id] + pt)
-
-            # plot_clusters(clustered_data, result_picture_clusters_path)
-            # from time import sleep
-            # sleep(0.1)
 
         visible_clusters_list = list(visible_clusters)
         first_cluster_sizes_rev.append(len(visible_clusters_list[0].points) if visible_cluster_count > 0 else 0)
         second_cluster_sizes_rev.append(len(visible_clusters_list[1].points) if visible_cluster_count > 1 else 0)
-        # print(rho_bar)
-        # print(new_layer)
-        # print(result_cluster_sets)
 
     assert(result_cluster_count != 1)
 
