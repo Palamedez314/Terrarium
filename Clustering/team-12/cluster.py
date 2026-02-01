@@ -130,6 +130,30 @@ def main():
     
     timer.start_variable("cluster-loop")
 
+    box_size = 2
+    mod = box_size * tau_eff
+
+    lattice_large_box_dict = {}
+    large_box_lattice_dict = {}
+    for pt in data_lattice_list:
+        associated_box = tuple(map(lambda x: x // mod, pt))
+        lattice_large_box_dict[pt] = associated_box
+        if associated_box in large_box_lattice_dict.keys():
+            large_box_lattice_dict[associated_box].add(pt)
+        else:
+            large_box_lattice_dict[associated_box] = {pt}
+        
+    large_boxes = set(large_box_lattice_dict.keys())
+
+    large_box_neighbor_graph = {}
+    iterated_boxes = set()
+    for new_box in large_boxes:
+        neighboring_boxes = {box for box in iterated_boxes if neighborTest(box, new_box)}
+        large_box_neighbor_graph[new_box] = neighboring_boxes
+        for box in neighboring_boxes:
+            large_box_neighbor_graph[box].add(new_box)
+        iterated_boxes.add(new_box)
+
     clusters : set[Cluster] = set()
     iterated_points = set()
     point_cluster_dict : dict[point, Cluster] = {}
@@ -148,19 +172,46 @@ def main():
         if not bool(new_layer):
             continue
 
+        tau_connection_graph = {}
+        old_points = set()
+        for box in large_boxes:
+            
+            box_lattice_points = large_box_lattice_dict[box]
+            neighboring_boxes_lattice_points = set.union(*[large_box_lattice_dict[neighboring_box]
+                                                           for neighboring_box 
+                                                           in large_box_neighbor_graph[box]]) if bool(large_box_neighbor_graph[box]) else set()
+            neighboring_boxes_lattice_points.update(box_lattice_points)
+            for new_point in large_box_lattice_dict[box]:
+                # lieber absolut (ohne sowas wie old_points) laufen und dann ohne den Schnitt?
+                if isBoundaryPoint(new_point, mod, tau_eff):
+                    relevant_points = neighboring_boxes_lattice_points & old_points
+                else:
+                    relevant_points = box_lattice_points & old_points
+                connected_points = {pt for pt in relevant_points if tauDistanceTest(pt, new_point)}
+                tau_connection_graph[new_point] = connected_points
+                for pt in connected_points:
+                    tau_connection_graph[pt].add(new_point)
+                old_points.add(new_point)
+
+
+
+
+
         for new_point in new_layer:
+
+            associated_box = lattice_large_box_dict[new_point]
+
+            neighboring_boxes = large_box_neighbor_graph[associated_box]
+
+            neighboring_boxes_lattice_points
+
             connected_points = {pt for pt in iterated_points if tauDistanceTest(pt, new_point)}
             connected_clusters = {point_cluster_dict[pt] for pt in connected_points}
 
-            if len(connected_clusters) == 0:
-                new_cluster = Cluster({new_point}, {density_dict[new_point]})
-                point_cluster_dict[new_point] = new_cluster
-                clusters.add(new_cluster)
-
-            else:
+            if bool(connected_clusters):
                 first_cluster = connected_clusters.pop()
 
-                if len(connected_clusters) > 0:
+                if bool(connected_clusters):
                     first_cluster.merge(*connected_clusters)
                     clusters -= connected_clusters
                     connected_cluster_points = set.union(*[ct.points for ct in connected_clusters])
@@ -169,6 +220,11 @@ def main():
 
                 first_cluster.add_point(new_point, density_dict[new_point])
                 point_cluster_dict[new_point] = first_cluster
+
+            else:
+                new_cluster = Cluster({new_point}, {density_dict[new_point]})
+                point_cluster_dict[new_point] = new_cluster
+                clusters.add(new_cluster)
 
             iterated_points.add(new_point)
 
