@@ -5,7 +5,9 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path
 from customTimer import CustomTimer
 from plotting import plot_dataset, plot_clusters
-from classter import Cluster, point
+from classter import Cluster
+
+type point = tuple[int,...]
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("datasetname", help="Name of the dataset out of the folder 'cluster-data' (without .csv extension)")
@@ -36,17 +38,27 @@ def cartesian_product(X : list[list]):
 def cartesian_potentiation(lst : list, dim : int):
     return cartesian_product([lst for _ in range(dim)])
 
-def neighborTest(b1, b2):
-    for coord1, coord2 in zip(b1, b2):
-        if abs(coord1 - coord2) > 1:
-            return False
-    return True
+# def isBoundaryPoint(pt, mod, tau_eff):
+#     for coord in pt:
+#         if coord % mod < tau_eff or coord % mod >= mod - tau_eff:
+#             return True
+#     return False
 
-def isBoundaryPoint(pt, mod, tau_eff):
-    for coord in pt:
-        if coord % mod < tau_eff or coord % mod >= mod - tau_eff:
-            return True
-    return False
+def smallBoxinLargeBoxTest (sb : point, lb : point) -> bool:
+        for coord_sb, coord_lb in zip(sb, lb):
+            diff = coord_sb - coord_lb
+            if diff != 0 and diff != 1:
+                return False
+        return True
+
+def epsDensityTest(ct: Cluster, rho_bar : int, eps_bar: float) -> bool:
+        return ct.max_density > rho_bar + eps_bar
+
+def tauDistanceTest(pt1 : point, pt2 : point, tau_eff : int) -> bool:
+        for coord1, coord2 in zip(pt1, pt2):
+            if abs(coord1 - coord2) > tau_eff:
+                return False
+        return True
 
 ####################################################################################################
 # Ausgeführter Code
@@ -63,7 +75,7 @@ def main():
     tau_factor = args.tau_factor
 
 
-    # Pfade
+    ############### Bau der Ergebnis Pfade ###############
     data_folder = Path("../cluster-data")
     result_folder = Path("../cluster-results")
     result_folder.mkdir(exist_ok=True)
@@ -84,23 +96,26 @@ def main():
     df = pd.read_csv(data_path, header=None)
     data_list = df.to_numpy().tolist()
 
-    ############### Datenverarbeitung (ohne Verwendung von externen Modulen) ###############
+    ############### Starten des Timers ###############
     timer = CustomTimer()
     timer.start()
 
-    n_data = len(data_list)
-    dim = len(data_list[0])
-    tau_eff = round_up(tau_factor/2)
-    rho_step = 1 / (n_data * (2 * delta) ** dim)
+    ############### Datenverarbeitung (ohne Verwendung von externen Modulen) ###############
 
+    n_data : int = len(data_list)
+    dim : int = len(data_list[0])
+    tau_eff : int = round_up(tau_factor/2)
+    rho_step : float = 1 / (n_data * (2 * delta) ** dim)
+
+    ############### Lattice vorbereiten und Dichte Dictonary aufstellen ###############
     timer.start_variable("density-dict")
-
-    # Lattice vorbereiten
     timer.start_variable("data_lattice_list")
-    data_lattice_list = [tuple(int((c + 1) // (2 * delta)) for c in pt) for pt in data_list]
+    data_lattice_list : list[point] = [tuple(int((c + 1) // (2 * delta)) for c in pt) for pt in data_list]
     timer.pause_variable("data_lattice_list")
-    density_dict = {}
-    inverse_density_dict = {}
+
+    density_dict : dict[point, int] = {}
+    inverse_density_dict : dict[int, set[point]] = {}
+
     for pt in data_lattice_list:
         old_density = density_dict.get(pt, 0)
         density_dict[pt] = old_density + 1
@@ -110,23 +125,15 @@ def main():
             inverse_density_dict[old_density + 1] = set()
         inverse_density_dict[old_density + 1].add(pt)
     timer.pause_variable("density-dict")
-
+    
     density_values = inverse_density_dict.keys()
     max_density = max(density_values)
     eps_bar = eps_factor * (max_density ** 0.5)
 
-    def tauDistanceTest(pt1, pt2) -> bool:
-        for coord1, coord2 in zip(pt1, pt2):
-            if abs(coord1 - coord2) > tau_eff:
-                return False
-        return True
-
-    def epsDensityTest(ct: Cluster) -> bool:
-        return ct.max_density > rho_bar + eps_bar
     
     timer.start_variable("cluster-loop")
 
-    # Länge einer Box in jede Dimension
+    # Länge einer Tau großen Box in jede Dimension
     small_box_size = 2 * tau_eff
     large_box_size = 4 * tau_eff
 
@@ -157,22 +164,18 @@ def main():
     small_boxes = set(small_box_lattice_dict.keys())
     large_boxes = set(lattice_large_box_dict.values())
 
-    def smallBoxinLargeBoxTest (sb : point, lb : point) -> bool:
-        for coord_sb, coord_lb in zip(sb, lb):
-            diff = coord_sb - coord_lb
-            if diff != 0 and diff != 1:
-                return False
-        return True
     
     timer.start_variable("large_box_shit")
 
-    timer.start_variable("cart_pot")
-    neg_one_zero_list = cartesian_potentiation([-1,0],dim)
-    timer.pause_variable("cart_pot")
-
+    # Abschätzung welche Methode schneller ist
     large_box_count = len(large_boxes)
 
     if large_box_count > 2**dim:
+
+        timer.start_variable("cart_pot")
+        neg_one_zero_list = cartesian_potentiation([-1,0],dim)
+        print(neg_one_zero_list)
+        timer.pause_variable("cart_pot")
         for small_box in small_boxes:
             potential_large_boxes : list[point] = [tuple(map(int.__add__, small_box, diff)) for diff in neg_one_zero_list]
             corr_large_boxes : set[point] = set(potential_large_boxes) & large_boxes
@@ -193,7 +196,7 @@ def main():
                         large_box_small_boxes_dict[large_box] = set()
                     large_box_small_boxes_dict[large_box].add(small_box)
 
-    # print("used cart_pot method" if large_box_count > 2**dim else "used large_box iteration method")
+    print("used cart_pot method" if large_box_count > 2**dim else "used large_box iteration method")
 
     timer.pause_variable("large_box_shit")
 
@@ -254,7 +257,7 @@ def main():
 
             large_box_points = set.union(*[small_box_lattice_dict[sb] for sb in corr_small_boxes])
 
-            connected_points = {pt for pt in iterated_points & large_box_points if tauDistanceTest(pt, new_point)}
+            connected_points = {pt for pt in iterated_points & large_box_points if tauDistanceTest(pt, new_point, tau_eff)}
             connected_clusters = {point_cluster_dict[pt] for pt in connected_points}
 
             if len(connected_clusters) == 0:
@@ -279,7 +282,7 @@ def main():
 
 
         for cluster in clusters:
-            cluster.update_visibility(epsDensityTest(cluster))
+            cluster.update_visibility(epsDensityTest(cluster, rho_bar, eps_bar))
 
         visible_clusters = {ct for ct in clusters if ct.visible}
 
@@ -350,14 +353,14 @@ def main():
     timer.pause_variable("plotting")
 
     # Zum Optimieren, manche Zeiten doppeln sich (z.B. "box-loops" und "def algorithm" in connected components enthalten)
-    # timer.print_cumul()
-    # timer.print_cumul_variable("data_lattice_list")
-    # timer.print_cumul_variable("density-dict")
-    # timer.print_cumul_variable("large_box_shit")
-    # timer.print_cumul_variable("cart_pot")
-    # timer.print_cumul_variable("cluster-loop")
-    # timer.print_cumul_variable("packing data")
-    # timer.print_cumul_variable("plotting")
+    timer.print_cumul()
+    timer.print_cumul_variable("data_lattice_list")
+    timer.print_cumul_variable("density-dict")
+    timer.print_cumul_variable("large_box_shit")
+    timer.print_cumul_variable("cart_pot")
+    timer.print_cumul_variable("cluster-loop")
+    timer.print_cumul_variable("packing data")
+    timer.print_cumul_variable("plotting")
 
 
 if __name__ == "__main__":
