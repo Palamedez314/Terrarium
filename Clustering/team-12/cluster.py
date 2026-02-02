@@ -15,9 +15,8 @@ def parse_args():
 
     parser.add_argument("datasetname",help="Name of the dataset in 'cluster-data' folder (without .csv extension)")
     parser.add_argument("-d", "--delta", type=float, default=0.05, help="Parameter, that determines the fineness of the underlying lattice")
-    parser.add_argument("-e", "--eps-factor", type=float, default=3.0, help="tbd")
-    parser.add_argument("-t", "--tau-factor", type=float, default=2.0, help="tbd")
-    parser.add_argument("-n", "--norm", type=float, default=float("inf"), help="tbd")
+    parser.add_argument("-e", "--eps-factor", type=float, default=3.0, help="Minimum number of points one box in a connected component must have to be considered a cluster.")
+    parser.add_argument("-t", "--tau-factor", type=float, default=2.0, help="Parameter, that determines the maximum distance for two boxes to become connected")
     return parser.parse_args()
 
 ############################################################################################
@@ -62,10 +61,7 @@ def main():
     delta = args.delta
     eps_factor = args.eps_factor
     tau_factor = args.tau_factor
-    norm = args.norm
 
-    if norm < 1:
-        raise ValueError("norm must be >= 1")
 
     # Pfade
     data_folder = Path("../cluster-data")
