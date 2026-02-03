@@ -12,6 +12,17 @@ class CustomTimer:
         self._timing_descriptions : dict[str,str] = {}
         self._cumul_times : dict[str,float] = {}
 
+    def initialize_variable(self, varname:str, description:str=""):
+        """Initialize timer with name varname, 
+        only useful for timing variables that might be out of scope"""
+        assert type(varname) == str
+        assert type(description) == str
+        if description == "":
+            description = varname
+        self._timing_descriptions[varname] = description
+        if varname not in self._cumul_times.keys():
+            self._cumul_times[varname] = 0.0
+
     def start_variable(self, varname:str, description:str=""):
         """Start timer with name varname"""
         assert type(varname) == str
@@ -24,6 +35,7 @@ class CustomTimer:
         self._timing_descriptions[varname] = description
 
     def print_variable(self, varname, val, cumul:bool=False):
+        """Print time value val for timer with name varname"""
         assert type(varname) == str
         if cumul:
             print(f"{self._timing_descriptions[varname]}: {val:0.4f} seconds (cumul)")
@@ -43,7 +55,8 @@ class CustomTimer:
         if print_cumul:
             self.print_cumul_variable(varname)
 
-    def pause_variable(self, varname:str, print_single:bool=False, print_cumul:bool=False) :
+    def pause_variable(self, varname:str, print_single:bool=False, print_cumul:bool=False):
+        """Pause timer with name varname"""
         assert type(varname) == str
         if varname not in self._start_times.keys():
             raise TimerError(f"Timer \"{varname}\" is not running. Use .start()/.start_variable() to start it")
@@ -56,51 +69,61 @@ class CustomTimer:
             self.print_cumul_variable(varname)
 
     def reset_variable(self, varname:str):
+        """Reset timer with name varname"""
         assert type(varname) == str
         self._start_times.pop(varname)
         self._timing_descriptions.pop(varname)
         self._cumul_times.pop(varname)
 
     def reset_all(self):
+        """Reset all timers"""
         self.__init__()
 
     def get_start_variable(self, varname:str):
+        """Get start time of timer with name varname"""
         assert type(varname) == str
         if varname not in self._cumul_times.keys():
             raise TimerError(f"Timer \"{varname}\" is not running. Use .start()/.start_variable() to start it")
         return self._start_times[varname]
 
     def get_cumul_variable(self, varname:str):
+        """Get sum of all previously recorded times for timer with name varname"""
         assert type(varname) == str
         if varname not in self._cumul_times.keys():
             raise TimerError(f"Timer \"{varname}\" has no recorded time yet. Use .start()/.start_variable() to record time values")
         return self._cumul_times[varname]
 
     def print_cumul_variable(self, varname:str):
+        """Print sum of all previously recorded times for timer with name varname"""
         if varname not in self._cumul_times.keys():
             raise TimerError(f"Timer \"{varname}\" has no recorded time yet. Use .start()/.start_variable() to record time values")
         self.print_variable(varname, self._cumul_times[varname], cumul=True)
         
     def start(self, description="Elapsed time"):
-        """Start a new timer"""
+        """Start generic timer"""
         self.start_variable("standard", description)
 
     def stop(self, print_single:bool=True, print_cumul:bool=False):
-        """Stop the timer, and report the elapsed time"""
+        """Stop generic timer"""
         self.stop_variable("standard", print_single=print_single, print_cumul=print_cumul)
 
     def pause(self, print_single:bool=False, print_cumul:bool=False):
+        """Pause generic timer"""
         self.pause_variable("standard", print_single=print_single, print_cumul=print_cumul)
 
     def reset(self):
+        """Reset generic timer"""
         self.reset_variable("standard")
 
     def get_cumul(self):
+        """Get sum of all previously recorded times for generic timer"""
         return self.get_cumul_variable("standard")
     
     def get_start(self):
+        """Get start time of generic timer"""
         return self.get_start_variable("standard")
     
     def print_cumul(self):
+        """Print sum of all previously recorded times for generic timer"""
         self.print_cumul_variable("standard")
     

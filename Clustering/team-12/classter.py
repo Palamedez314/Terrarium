@@ -1,3 +1,8 @@
+############################################################################################
+# Cluster-Klasse 
+############################################################################################
+
+# Abkürzung für den Typen tuple[int,...]
 type point = tuple[int,...]
 
 class Cluster:
@@ -7,15 +12,18 @@ class Cluster:
         self.visible : bool = visible
 
     def __str__(self) -> str:
-        return f"Cluster with \npoints: {self.points},\nmax_density: {self.max_density},\nhidden: {self.visible}"
+        return f"Cluster-Object with the following fields\npoints: {self.points},\nmax_density: {self.max_density},\nvisible: {self.visible}\n"
 
     def add_point(self, pt : point, density : int) -> None:
+        """Adding a single Point to the cluster"""
         self.points.add(pt)
         self.max_density = max(self.max_density, density)
 
     def merge(self, *merge_clusters : 'Cluster') -> None:
+        """Merging an iterable of Clustern into this Cluster"""
         self.points.update(*[cluster.points for cluster in merge_clusters])
         self.max_density = max(*[cluster.max_density for cluster in merge_clusters], self.max_density)
 
     def update_visibility(self, visible) -> None:
+        """changing the visibility flag of the Cluster"""
         self.visible = visible
