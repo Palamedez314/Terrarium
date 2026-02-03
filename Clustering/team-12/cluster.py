@@ -249,41 +249,10 @@ def main():
     # Iteration von rho von maximaler Dichte bis 0
     for rho_bar in range(max_density, 0, -1):
 
-        old_visible_clusters = visible_clusters.copy()
+        old_visible_clusters_frozensets = {frozenset(cl.points) for cl in visible_clusters}
         
         # Punkte mit Dichte rho_bar
         new_layer = inverse_density_dict[rho_bar]
-        
-        # TODO: vllt noch tau_connection_graph Ansatz mit Pointern, sonst auskommentierten Code entfernen
-
-        # tau_connection_graph = {}
-        # old_points = set()
-        # for box in large_boxes:
-            
-            # box_lattice_points = large_box_lattice_dict[box]
-            # neighboring_boxes_lattice_points = set.union(*[large_box_lattice_dict[neighboring_box]
-            #                                                for neighboring_box 
-            #                                                in large_box_neighbor_graph[box]]) if bool(large_box_neighbor_graph[box]) else set()
-            # neighboring_boxes_lattice_points.update(box_lattice_points)
-            # for new_point in large_box_lattice_dict[box]:
-            #     # lieber absolut (ohne sowas wie old_points) laufen und dann ohne den Schnitt?
-            #     if isBoundaryPoint(new_point, box_size, tau_eff):
-            #         relevant_points = neighboring_boxes_lattice_points & old_points
-            #     else:
-            #         relevant_points = box_lattice_points & old_points
-            #     connected_points = {pt for pt in relevant_points if tauDistanceTest(pt, new_point)}
-            #     tau_connection_graph[new_point] = connected_points
-            #     for pt in connected_points:
-            #         tau_connection_graph[pt].add(new_point)
-            #     old_points.add(new_point)
-
-        # for new_point in new_layer:
-
-        #     associated_box = lattice_large_box_dict[new_point]
-
-        #     neighboring_boxes = large_box_neighbor_graph[associated_box]
-
-        #     neighboring_boxes_lattice_points
 
         iterating_set = new_layer.copy()
 
@@ -338,11 +307,12 @@ def main():
         visible_clusters = {ct for ct in clusters if ct.visible}
 
         visible_cluster_count = len(visible_clusters)
-        visible_clusters_list = list(visible_clusters)
+        visible_clusters_list = list(visible_clusters)        
 
         if visible_cluster_count != 1:
 
-            if visible_clusters != old_visible_clusters:
+            # Bedingung, dass sich die Ergebnis-Cluster verändert haben
+            if {frozenset(cl.points) for cl in visible_clusters} != old_visible_clusters_frozensets:
 
                 # Sammeln der möglichen finalen Cluster
                 result_cluster_sets = [ct.points.copy() for ct in visible_clusters_list]
@@ -358,7 +328,6 @@ def main():
         first_cluster_sizes_rev.append(len(visible_clusters_list[0].points) if visible_cluster_count > 0 else 0)
         second_cluster_sizes_rev.append(len(visible_clusters_list[1].points) if visible_cluster_count > 1 else 0)
 
-    # TODO: wollen wir so nen assert hier drin haben oder ist das zu gefährlich :)
     # Überprüfen, ob das Höchzählende Verfahren terminiert wäre (also ob das Ergebnis korrekt ist)
     assert(result_cluster_count != 1)
 
@@ -369,8 +338,8 @@ def main():
     second_cluster_sizes_rev.append(0)
 
     # timer.start_variable("packing data")
-
-    # TODO: geht das effizienter?
+    
+    # Markieren der Datenpunkte mit Cluster-ids
     if result_cluster_count == 0:
         clustered_data = [[1] + pt for pt in data_list]
     else:
