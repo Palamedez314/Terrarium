@@ -2,7 +2,6 @@
 # Cluster-Klasse 
 ############################################################################################
 
-# Abkürzung für den Typen tuple[int,...]
 type point = tuple[int,...]
 
 class Cluster:
